@@ -1,0 +1,33 @@
+# SPDX-FileCopyrightText: 2025 INDUSTRIA DE DISEÑO TEXTIL S.A. (INDITEX S.A.)
+# SPDX-License-Identifier: Apache-2.0
+
+name: First Contribution
+permissions:
+  contents: read
+
+on:
+  pull_request:
+
+concurrency:
+  group: first-contribution-${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  first-contribution:
+    name: First Contribution
+    runs-on: ubuntu-latest
+    steps:
+      - uses: plbstl/first-contribution@07f211b42b5db787c5220a4b43f888a904abed34 # v3
+        with:
+          pr-opened-msg: |
+            👋 Thanks for your contribution!
+
+            Before we can review or merge this pull request, we need you to **sign the Contributor License Agreement (CLA)**.
+
+            Please read and sign the CLA at the following link:
+            👉 https://github.com/InditexTech/foss/blob/main/CONTRIBUTING.md#prerequisites
+
+            If you have already signed it, feel free to comment here to confirm and we'll verify it.
+            If you have any questions, don't hesitate to reach out. Thanks.
+
+            cc: @InditexTech/oso-admins

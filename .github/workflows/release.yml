@@ -28,8 +28,8 @@ jobs:
       - name: Load Robin version
         id: version
         run: |
-          echo "version=$(make version)" >> $GITHUB_OUTPUT
-          echo $GITHUB_OUTPUT
+          echo "version=$(make version)" >> "$GITHUB_OUTPUT"
+          echo "$GITHUB_OUTPUT"
 
   check:
     name: Check versions

@@ -33,6 +33,11 @@ CONTAINER_TOOL ?= docker
 # OPERATOR_DIR defines the sibling operator checkout used by the local image build.
 OPERATOR_DIR ?= ../redkey-operator
 
+# OPERATOR_REPO and OPERATOR_REF locate the operator checkout that `ci-verify`
+# materializes when one is not already present as a sibling directory.
+OPERATOR_REPO ?= https://github.com/InditexTech/redkey-operator.git
+OPERATOR_REF ?= main
+
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
 GOBIN=$(shell go env GOPATH)/bin
@@ -77,6 +82,17 @@ help: ##	Display this help.
 
 .PHONY: verify
 verify: tidy fmt vet lint build test-all ## Run all verification steps (fmt, vet, lint, unit and integration tests).
+
+# `go.mod` replaces github.com/inditextech/redkey-operator with the sibling
+# checkout at $(OPERATOR_DIR), so every Go command needs that directory to
+# exist. Developers already have it; CI does not, so clone it first.
+.PHONY: ci-verify
+ci-verify: ## Run `verify` in CI, materializing the sibling operator checkout it depends on.
+	@if [ ! -d "$(OPERATOR_DIR)" ]; then \
+		echo "Cloning $(OPERATOR_REPO)@$(OPERATOR_REF) into $(OPERATOR_DIR)"; \
+		git clone --depth 1 --branch "$(OPERATOR_REF)" "$(OPERATOR_REPO)" "$(OPERATOR_DIR)"; \
+	fi
+	$(MAKE) verify
 
 .PHONY: version
 version: ## Print the current version of the project.
