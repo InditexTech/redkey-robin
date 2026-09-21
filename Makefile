@@ -19,7 +19,7 @@ VERSION ?= 0.2.0
 ## Tool Versions and Configuration
 
 # GOLANG_VERSION defines the Go version used in the Dockerfile for building the Robin controller image.
-GOLANG_VERSION := 1.26.5
+GOLANG_VERSION := 1.26.8
 
 # REDIS_CLIENT_VERSION defines the version of the Redis client library used in the project. This variable is used in the Dockerfile to ensure that the correct version of the Redis client is included in the built image.
 REDIS_CLIENT_VERSION := 8.10.0
