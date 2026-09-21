@@ -24,10 +24,7 @@ Often, your issue might have already been reported and solved by others. Please 
 
 ### 3. **Community and Discussion**
 
-If you didn’t find your answer in the documentation or the issues, you can ask for help or discuss the project in our community channels:
-
-- [Discussion Forum / Slack / Discord / Gitter](link-to-community)
-- [StackOverflow tag](your-stackoverflow-tag)
+If you didn’t find your answer in the documentation or the issues, open a [discussion or issue](https://github.com/InditexTech/redkey-robin/issues) or reach out to us by email at <oso@inditex.com>.
 
 ## Contributing to the Project
 
@@ -37,7 +34,7 @@ We love contributions from the community! If you'd like to contribute to this pr
 
 - How do I install the project?
 
-Please refer to the [developer guide](./docs/).
+Please refer to the [Redkey Operator developer guide](https://github.com/InditexTech/redkey-operator/blob/main/docs/developer-guide/development-guide.md), which covers both projects.
 
 - How do I contribute to the documentation?
 

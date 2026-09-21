@@ -28,7 +28,7 @@ Today, Robin focuses on orchestration of `RedkeyConfig` progression rather than 
 
 | Layer | Technology |
 | ----- | ---------- |
-| Language | Go 1.26.5 |
+| Language | Go 1.26.8 |
 | Runtime style | Standalone controller-style daemon |
 | Kubernetes client | [controller-runtime](https://sigs.k8s.io/controller-runtime) v0.24.0 |
 | API dependency | `github.com/inditextech/redkey-operator/api/v1beta1` via local `replace ../redkey-operator` |
