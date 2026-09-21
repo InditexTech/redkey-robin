@@ -46,3 +46,5 @@ and its purpose.
 - Remember to add license and copyright information following the [REUSE Specification](https://reuse.software/spec/#copyright-and-licensing-information).
 
 ## Development
+
+For development, build, deployment, and debugging workflows, follow the [Redkey Operator developer guide](https://github.com/InditexTech/redkey-operator/blob/main/docs/developer-guide/development-guide.md), which covers both projects.
