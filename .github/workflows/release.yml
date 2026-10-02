@@ -37,11 +37,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check versions
+        env:
+          RELEASE_TAG_NAME: ${{ github.event.release.tag_name }}
         run: |
           echo "version: ${{ needs.release.outputs.version }}"
-          echo "tag_name: ${{ github.event.release.tag_name }}"
+          echo "tag_name: $RELEASE_TAG_NAME"
 
-          if [ "${{ github.event.release.tag_name }}" != "${{ needs.release.outputs.version }}" ]; then
+          if [ "$RELEASE_TAG_NAME" != "${{ needs.release.outputs.version }}" ]; then
             echo "Version in Makefile does not match release tag"
             exit 1
           fi
