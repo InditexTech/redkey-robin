@@ -11,7 +11,7 @@ replace github.com/inditextech/redkey-operator => ../redkey-operator
 require (
 	github.com/alicebob/miniredis/v2 v2.38.0
 	github.com/inditextech/redkey-operator v0.0.0-00010101000000-000000000000
-	github.com/onsi/ginkgo/v2 v2.32.0
+	github.com/onsi/ginkgo/v2 v2.33.0
 	github.com/onsi/gomega v1.42.1
 	github.com/prometheus/client_golang v1.24.1
 	github.com/prometheus/client_model v0.6.2
