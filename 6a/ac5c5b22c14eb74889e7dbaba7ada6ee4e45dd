@@ -1,0 +1,19 @@
+test/integration/cluster_lifecycle_test.go
+  s_197148f80bfa2c::t_962698de556690 72,77,132,136,170,174,223,228
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6aac5c5b22c14eb74889e7dbaba7ada6ee4e45dd",
+  "prompts": {},
+  "sessions": {
+    "s_197148f80bfa2c": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "9200166d-ce07-4019-bc0a-dcf87e8d413e",
+        "model": "copilot/claude-opus-5.5"
+      },
+      "human_author": "Alberto Martínez Pérez <albertompe@ext.inditex.com>"
+    }
+  }
+}
