@@ -154,6 +154,7 @@ make test                     # fast unit-only loop while iterating
 make test-integration         # envtest coverage for reconciler/runtime behavior
 make lint && make test-all    # preferred full local gate before handing off
 make build                    # optional final binary build check
+make fuzz FUZZTIME=10s        # optional: fuzz the Redis output parsers when changing them
 ```
 
 ### Unit tests
