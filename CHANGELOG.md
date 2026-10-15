@@ -12,6 +12,7 @@ Format is based on [Keep a Changelog](http://keepachangelog.com/).
 
 ## [Unreleased] - dd.mm.yyyy
 ### Added
+- Go native fuzz tests for the Redis output parsers (slot ranges, `CLUSTER NODES`, `--cluster check`), plus a `make fuzz` target.
 ### Fixed
 ### Changed
 - Bump Go to 1.27.2, controller-runtime to v0.25.2, `k8s.io/*` to v0.37.1, go-redis to v9.23.0 and the remaining direct dependencies to their latest versions.
