@@ -1,0 +1,33 @@
+CHANGELOG.md
+  s_e171aea9324e95::t_aae5933ce07ba6 17-20
+Dockerfile
+  s_e171aea9324e95::t_1c9b7afd7f7278 9,27
+Makefile
+  s_e171aea9324e95::t_2956258b136f05 22,25,216-218
+go.sum
+  s_197148f80bfa2c::t_2ec96726fc280e 3-4,25-26,37-70,90-93,112-115,121-130,133-134,136-137,139-140,155-156,165-182,187-188,193-200,203-208,213-214
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "581145626272b1b0165f7f03341c93487758ab27",
+  "prompts": {},
+  "sessions": {
+    "s_197148f80bfa2c": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "9200166d-ce07-4019-bc0a-dcf87e8d413e",
+        "model": "copilot/claude-opus-5.5"
+      },
+      "human_author": "Alberto Martínez Pérez <albertompe@ext.inditex.com>"
+    },
+    "s_e171aea9324e95": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "5703d78a-be66-4921-883c-187918b5ce4f",
+        "model": "unknown"
+      },
+      "human_author": "Alberto Martínez Pérez <albertompe@ext.inditex.com>"
+    }
+  }
+}
