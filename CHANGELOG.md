@@ -12,5 +12,6 @@ Format is based on [Keep a Changelog](http://keepachangelog.com/).
 
 ## [Unreleased] - dd.mm.yyyy
 ### Added
+- Go native fuzz tests for the Redis output parsers (slot ranges, `CLUSTER NODES`, `--cluster check`), plus a `make fuzz` target.
 ### Fixed
 ### Changed
