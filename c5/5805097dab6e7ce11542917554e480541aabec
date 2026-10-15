@@ -1,0 +1,19 @@
+Makefile
+  s_4759a00b759e60::t_324991d8001301 148
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c55805097dab6e7ce11542917554e480541aabec",
+  "prompts": {},
+  "sessions": {
+    "s_4759a00b759e60": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "defd28a1-a152-453f-b423-e74a3b59bc19",
+        "model": "unknown"
+      },
+      "human_author": "Alberto Martínez Pérez <albertompe@ext.inditex.com>"
+    }
+  }
+}
