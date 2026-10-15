@@ -19,10 +19,10 @@ VERSION ?= 0.2.0
 ## Tool Versions and Configuration
 
 # GOLANG_VERSION defines the Go version used in the Dockerfile for building the Robin controller image.
-GOLANG_VERSION := 1.26.8
+GOLANG_VERSION := 1.27.2
 
 # REDIS_CLIENT_VERSION defines the version of the Redis client library used in the project. This variable is used in the Dockerfile to ensure that the correct version of the Redis client is included in the built image.
-REDIS_CLIENT_VERSION := 8.10.0
+REDIS_CLIENT_VERSION := 8.10.2
 
 # CONTAINER_TOOL defines the container tool to be used for building images.
 # Be aware that the target commands are only tested with Docker which is
@@ -213,9 +213,9 @@ GOLANGCI_LINT = $(LOCALBIN)/golangci-lint
 ## Tool Versions
 #ENVTEST_VERSION is the version of controller-runtime release branch to fetch the envtest setup script (i.e. release-0.20)
 ENVTEST_VERSION ?= $(shell go list -m -f "{{ .Version }}" sigs.k8s.io/controller-runtime | awk -F'[v.]' '{printf "release-%d.%d", $$2, $$3}')
-#ENVTEST_K8S_VERSION is the version of Kubernetes to use for setting up ENVTEST binaries (i.e. 1.31)
-ENVTEST_K8S_VERSION ?= $(shell go list -m -f "{{ .Version }}" k8s.io/api | awk -F'[v.]' '{printf "1.%d", $$3}')
-GOLANGCI_LINT_VERSION ?= v2.1.0
+#ENVTEST_K8S_VERSION is the version of Kubernetes to use for setting up ENVTEST binaries; pinned to the production target.
+ENVTEST_K8S_VERSION ?= 1.33
+GOLANGCI_LINT_VERSION ?= v2.14.0
 
 .PHONY: setup-envtest
 setup-envtest: envtest ## Download the binaries required for ENVTEST in the local bin directory.

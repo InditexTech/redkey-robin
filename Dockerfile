@@ -6,7 +6,7 @@
 ### Build stage
 
 # Define the desired Golang version
-ARG GOLANG_VERSION=1.26.8
+ARG GOLANG_VERSION=1.27.2
 
 # Use an official Golang image with a specific version based on Debian
 FROM golang:${GOLANG_VERSION}-trixie AS builder
@@ -24,7 +24,7 @@ WORKDIR /redis-client
 RUN apt update && apt upgrade -y && apt install -y git
 
 # Define the desired Redis client version
-ARG REDIS_CLIENT_VERSION=8.10.0
+ARG REDIS_CLIENT_VERSION=8.10.2
 
 # Clone the Redis repository, checkout the desired version and build redis-cli
 RUN git clone https://github.com/redis/redis.git && \
