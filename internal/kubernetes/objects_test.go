@@ -825,21 +825,18 @@ func containsSubstring(s, substr string) bool {
 
 func TestBuildRedisConf_ClusterDefaultsApplied(t *testing.T) {
 	// Every default in clusterDefaults must appear in the generated config,
-	// regardless of topology parameters.
+	// regardless of storage mode.
 	topologies := []struct {
-		name               string
-		ephemeral          bool
-		replicasPerPrimary int32
+		name      string
+		ephemeral bool
 	}{
-		{"ephemeral_no_replicas", true, 0},
-		{"ephemeral_with_replicas", true, 1},
-		{"persistent_no_replicas", false, 0},
-		{"persistent_with_replicas", false, 1},
+		{"ephemeral", true},
+		{"persistent", false},
 	}
 
 	for _, tc := range topologies {
 		t.Run(tc.name, func(t *testing.T) {
-			conf := buildRedisConf("", "", tc.ephemeral, tc.replicasPerPrimary, false)
+			conf := buildRedisConf("", "", tc.ephemeral, false)
 			for _, param := range clusterDefaults {
 				if !contains(conf, param) {
 					t.Errorf("expected default param %q in redis.conf for topology %s", param, tc.name)
@@ -862,7 +859,7 @@ func TestBuildRedisConf_DataDirByStorage(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			conf := buildRedisConf("", "", tc.ephemeral, 0, false)
+			conf := buildRedisConf("", "", tc.ephemeral, false)
 			if !contains(conf, "dir "+tc.wantDir+"\n") {
 				t.Errorf("expected 'dir %s' in redis.conf, got:\n%s", tc.wantDir, conf)
 			}
@@ -874,7 +871,7 @@ func TestBuildRedisConf_DataDirByStorage(t *testing.T) {
 }
 
 func TestBuildRedisConf_RequireFullCoverageNo(t *testing.T) {
-	conf := buildRedisConf("", "", true, 0, false)
+	conf := buildRedisConf("", "", true, false)
 	if !contains(conf, "cluster-require-full-coverage no") {
 		t.Error("expected 'cluster-require-full-coverage no' in redis.conf")
 	}
@@ -882,12 +879,12 @@ func TestBuildRedisConf_RequireFullCoverageNo(t *testing.T) {
 
 func TestBuildRedisConf_AllowReadsWhenDownAllTopologies(t *testing.T) {
 	// cluster-allow-reads-when-down must be present even without replicas
-	conf := buildRedisConf("", "", true, 0, false)
+	conf := buildRedisConf("", "", true, false)
 	if !contains(conf, "cluster-allow-reads-when-down yes") {
 		t.Error("expected 'cluster-allow-reads-when-down yes' for ephemeral no-replicas")
 	}
 
-	conf = buildRedisConf("", "", false, 0, false)
+	conf = buildRedisConf("", "", false, false)
 	if !contains(conf, "cluster-allow-reads-when-down yes") {
 		t.Error("expected 'cluster-allow-reads-when-down yes' for persistent no-replicas")
 	}
@@ -899,19 +896,16 @@ func TestBuildRedisConf_AllowReplicaMigrationDisabled(t *testing.T) {
 	// auto-converted into replicas (which would generate needless sync traffic and leave
 	// replicas in a cluster configured without them).
 	topologies := []struct {
-		name               string
-		ephemeral          bool
-		replicasPerPrimary int32
+		name      string
+		ephemeral bool
 	}{
-		{"ephemeral_no_replicas", true, 0},
-		{"ephemeral_with_replicas", true, 1},
-		{"persistent_no_replicas", false, 0},
-		{"persistent_with_replicas", false, 1},
+		{"ephemeral", true},
+		{"persistent", false},
 	}
 
 	for _, tc := range topologies {
 		t.Run(tc.name, func(t *testing.T) {
-			conf := buildRedisConf("", "", tc.ephemeral, tc.replicasPerPrimary, false)
+			conf := buildRedisConf("", "", tc.ephemeral, false)
 			if !contains(conf, "cluster-allow-replica-migration no") {
 				t.Errorf("expected 'cluster-allow-replica-migration no' in redis.conf for topology %s", tc.name)
 			}
@@ -922,7 +916,7 @@ func TestBuildRedisConf_AllowReplicaMigrationDisabled(t *testing.T) {
 func TestBuildRedisConf_UserConfigOverridesDefaults(t *testing.T) {
 	// User sets cluster-require-full-coverage yes — it should appear AFTER the default 'no'
 	userConf := "cluster-require-full-coverage yes"
-	conf := buildRedisConf(userConf, "", true, 0, false)
+	conf := buildRedisConf(userConf, "", true, false)
 
 	// Both should be present (last-write-wins in Redis)
 	if !contains(conf, "cluster-require-full-coverage no") {
@@ -1013,7 +1007,7 @@ func standaloneConfig() *redisv1.RedkeyConfig {
 }
 
 func TestBuildRedisConf_StandaloneDisablesCluster(t *testing.T) {
-	conf := buildRedisConf("", "", true, 0, true)
+	conf := buildRedisConf("", "", true, true)
 	if !contains(conf, "cluster-enabled no") {
 		t.Error("expected 'cluster-enabled no' for standalone mode")
 	}

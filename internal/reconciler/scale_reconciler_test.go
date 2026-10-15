@@ -25,11 +25,11 @@ func scalingTestConfig(status string, primaries, replicasPerPrimary int32) *redi
 	return cfg
 }
 
-func makeStatefulSet(name, ns string, replicas, ready int32) *appsv1.StatefulSet {
+// makeStatefulSet returns a StatefulSet of the given size with no ready pods.
+func makeStatefulSet(replicas int32) *appsv1.StatefulSet {
 	return &appsv1.StatefulSet{
-		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
+		ObjectMeta: metav1.ObjectMeta{Name: "test-cluster", Namespace: "default"},
 		Spec:       appsv1.StatefulSetSpec{Replicas: &replicas},
-		Status:     appsv1.StatefulSetStatus{ReadyReplicas: ready},
 	}
 }
 
@@ -101,7 +101,7 @@ func TestOrdinalOf(t *testing.T) {
 func TestHandleScalingUp_ScalesStatefulSetAndWaitsForPods(t *testing.T) {
 	cfg := scalingTestConfig(redisv1.ClusterStatusScalingUp, 5, 0)
 	owner := testOwnerCluster()
-	sts := makeStatefulSet("test-cluster", "default", 3, 0) // old size, no pods ready
+	sts := makeStatefulSet(3) // old size, no pods ready
 
 	fakeClient := fake.NewClientBuilder().
 		WithScheme(clusterTestScheme).
@@ -131,7 +131,7 @@ func TestHandleScalingUp_ScalesStatefulSetAndWaitsForPods(t *testing.T) {
 func TestHandleScalingUp_RoutedViaReconcile(t *testing.T) {
 	cfg := scalingTestConfig(redisv1.ClusterStatusScalingUp, 5, 0)
 	owner := testOwnerCluster()
-	sts := makeStatefulSet("test-cluster", "default", 3, 0)
+	sts := makeStatefulSet(3)
 
 	fakeClient := fake.NewClientBuilder().
 		WithScheme(clusterTestScheme).
@@ -159,7 +159,7 @@ func TestHandleScalingUp_RoutedViaReconcile(t *testing.T) {
 func TestHandleScalingDown_ShrinksStatefulSetWhenNodesAlreadyGone(t *testing.T) {
 	cfg := scalingTestConfig(redisv1.ClusterStatusScalingDown, 3, 0)
 	owner := testOwnerCluster()
-	sts := makeStatefulSet("test-cluster", "default", 5, 0) // larger than target, no pods
+	sts := makeStatefulSet(5) // larger than target, no pods
 
 	fakeClient := fake.NewClientBuilder().
 		WithScheme(clusterTestScheme).
@@ -193,7 +193,7 @@ func TestHandleFastScaling_DeletesStatefulSetAtWrongSize(t *testing.T) {
 	cfg.Spec.Ephemeral = true
 	cfg.Spec.PurgeKeysOnRebalance = boolPtr(true)
 	owner := testOwnerCluster()
-	sts := makeStatefulSet("test-cluster", "default", 3, 0)
+	sts := makeStatefulSet(3)
 
 	fakeClient := fake.NewClientBuilder().
 		WithScheme(clusterTestScheme).

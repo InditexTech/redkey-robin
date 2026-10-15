@@ -134,7 +134,7 @@ func TestCollector_DiscoverNodes(t *testing.T) {
 	rtConfig.SetTopology(3, 1)
 
 	// Create fake pods with IPs.
-	pods := []corev1.Pod{}
+	pods := make([]corev1.Pod, 0, 6)
 	for i := range 6 {
 		pods = append(pods, corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
@@ -585,7 +585,7 @@ func TestCollector_CollectReactsToTopologyChange(t *testing.T) {
 	rtConfig := config.NewRuntimeConfig()
 
 	// Create pods for the maximum topology (6 nodes).
-	var pods []runtime.Object
+	pods := make([]runtime.Object, 0, 6)
 	for i := range 6 {
 		pods = append(pods, &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{

@@ -17,7 +17,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	redisv1 "github.com/inditextech/redkey-operator/api/v1beta1"
-	"github.com/inditextech/redkey-robin/internal/config"
+	robinconfig "github.com/inditextech/redkey-robin/internal/config"
 	"github.com/inditextech/redkey-robin/internal/health"
 	"github.com/inditextech/redkey-robin/internal/kubernetes"
 	"github.com/inditextech/redkey-robin/internal/redis"
@@ -33,13 +33,13 @@ type ClusterReconciler struct {
 	client           client.Client
 	clusterName      string
 	namespace        string
-	runtimeConfig    *config.RuntimeConfig
+	runtimeConfig    *robinconfig.RuntimeConfig
 	logger           *slog.Logger
 	healthReconciler *HealthReconciler
 }
 
 // NewClusterReconciler creates a new ClusterReconciler.
-func NewClusterReconciler(c client.Client, clusterName, namespace string, runtimeConfig *config.RuntimeConfig) *ClusterReconciler {
+func NewClusterReconciler(c client.Client, clusterName, namespace string, runtimeConfig *robinconfig.RuntimeConfig) *ClusterReconciler {
 	logger := slog.Default().With("component", "cluster-reconciler", "cluster", clusterName)
 
 	// Create health checker with redis client factory
@@ -991,17 +991,17 @@ func (cr *ClusterReconciler) applyAuthCredentials(ctx context.Context, config *r
 	}
 
 	for name, addr := range podAddrs {
-		client := redis.NewClient(addr, oldPassword)
+		rc := redis.NewClient(addr, oldPassword)
 
-		if err := client.ConfigSet(ctx, "requirepass", newPassword); err != nil {
-			_ = client.Close()
+		if err := rc.ConfigSet(ctx, "requirepass", newPassword); err != nil {
+			_ = rc.Close()
 			return fmt.Errorf("CONFIG SET requirepass on %s: %w", name, err)
 		}
-		if err := client.ConfigSet(ctx, "masterauth", newPassword); err != nil {
-			_ = client.Close()
+		if err := rc.ConfigSet(ctx, "masterauth", newPassword); err != nil {
+			_ = rc.Close()
 			return fmt.Errorf("CONFIG SET masterauth on %s: %w", name, err)
 		}
-		_ = client.Close()
+		_ = rc.Close()
 
 		cr.logger.Info("Applied auth configuration via CONFIG SET",
 			"node", name, "hasAuth", newPassword != "")

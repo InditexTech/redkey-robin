@@ -274,7 +274,7 @@ func ensureConfigMap(ctx context.Context, c client.Client, clusterName, namespac
 }
 
 func buildConfigMap(clusterName, namespace string, config *redisv1.RedkeyConfig, password string) *corev1.ConfigMap {
-	redisConf := buildRedisConf(config.Spec.RedisConfig, password, config.Spec.Ephemeral, config.Spec.ReplicasPerPrimary, config.Spec.IsStandalone())
+	redisConf := buildRedisConf(config.Spec.RedisConfig, password, config.Spec.Ephemeral, config.Spec.IsStandalone())
 	specLabels := derefMap(config.Spec.Labels)
 	specAnnotations := derefMap(config.Spec.Annotations)
 	return &corev1.ConfigMap{
@@ -321,7 +321,7 @@ var standaloneDefaults = []string{
 	"cluster-enabled no",
 }
 
-func buildRedisConf(userConfig, password string, ephemeral bool, replicasPerPrimary int32, standalone bool) string {
+func buildRedisConf(userConfig, password string, ephemeral, standalone bool) string {
 	var lines []string
 
 	// Redis writes nodes.conf (cluster topology metadata) into `dir`. Ephemeral clusters have no
@@ -468,7 +468,7 @@ func ensureStatefulSet(ctx context.Context, c client.Client, clusterName, namesp
 }
 
 func buildStatefulSet(clusterName, namespace string, config *redisv1.RedkeyConfig, owner *redisv1.Redkey) *appsv1.StatefulSet {
-	replicas := int32(config.Spec.Primaries + (config.Spec.Primaries * config.Spec.ReplicasPerPrimary))
+	replicas := config.Spec.Primaries + (config.Spec.Primaries * config.Spec.ReplicasPerPrimary)
 	image := config.Spec.Image
 	if image == "" {
 		image = defaultRedisImage
@@ -986,7 +986,7 @@ func UpdateConfigMap(ctx context.Context, c client.Client, clusterName, namespac
 		return fmt.Errorf("getting ConfigMap %s: %w", clusterName, err)
 	}
 
-	conf := buildRedisConf(config.Spec.RedisConfig, password, config.Spec.Ephemeral, config.Spec.ReplicasPerPrimary, config.Spec.IsStandalone())
+	conf := buildRedisConf(config.Spec.RedisConfig, password, config.Spec.Ephemeral, config.Spec.IsStandalone())
 	if cm.Data == nil {
 		cm.Data = make(map[string]string)
 	}

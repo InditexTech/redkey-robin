@@ -110,7 +110,7 @@ func (cr *ClusterReconciler) handleFastUpgradeStart(ctx context.Context, config 
 }
 
 func (cr *ClusterReconciler) handleFastUpgradeWaitReady(ctx context.Context, config *redisv1.RedkeyConfig) (reconcileSchedule, error) {
-	totalNodes := int32(config.Spec.Primaries + (config.Spec.Primaries * config.Spec.ReplicasPerPrimary))
+	totalNodes := config.Spec.Primaries + (config.Spec.Primaries * config.Spec.ReplicasPerPrimary)
 	ready, err := kubernetes.AllPodsReady(ctx, cr.client, cr.clusterName, cr.namespace, totalNodes)
 	if err != nil {
 		return reconcileAfterInterval, fmt.Errorf("checking pods during fast upgrade: %w", err)
@@ -305,7 +305,7 @@ func (cr *ClusterReconciler) handleUpgradeStart(ctx context.Context, config *red
 	}
 
 	// Scale up: add extra nodes (1 primary + replicasPerPrimary replicas)
-	currentTotal := int32(config.Spec.Primaries + (config.Spec.Primaries * config.Spec.ReplicasPerPrimary))
+	currentTotal := config.Spec.Primaries + (config.Spec.Primaries * config.Spec.ReplicasPerPrimary)
 	extra := upgradeExtraNodes(config)
 	targetTotal := currentTotal + extra
 
@@ -345,7 +345,7 @@ func (cr *ClusterReconciler) handleUpgradeStart(ctx context.Context, config *red
 
 // handleUpgradeScalingUp waits for the extra pods to be ready, then meets them into the cluster.
 func (cr *ClusterReconciler) handleUpgradeScalingUp(ctx context.Context, config *redisv1.RedkeyConfig) (reconcileSchedule, error) {
-	currentTotal := int32(config.Spec.Primaries + (config.Spec.Primaries * config.Spec.ReplicasPerPrimary))
+	currentTotal := config.Spec.Primaries + (config.Spec.Primaries * config.Spec.ReplicasPerPrimary)
 	extra := upgradeExtraNodes(config)
 	targetTotal := currentTotal + extra
 
@@ -681,7 +681,7 @@ func (cr *ClusterReconciler) handleUpgradeRollingUpdate(ctx context.Context, con
 	}
 
 	// Get another node to help meet — use the extra primary which is always up
-	seedOrdinal := int32(config.Spec.Primaries + config.Spec.Primaries*config.Spec.ReplicasPerPrimary)
+	seedOrdinal := config.Spec.Primaries + config.Spec.Primaries*config.Spec.ReplicasPerPrimary
 	seedAddr, err := cr.getPodAddr(ctx, seedOrdinal)
 	if err != nil {
 		return reconcileAfterInterval, fmt.Errorf("getting seed pod address: %w", err)
@@ -764,7 +764,7 @@ func (cr *ClusterReconciler) handleUpgradeRollingUpdate(ctx context.Context, con
 // is empty). Then forgets the extra node and proceeds to scale down.
 func (cr *ClusterReconciler) handleUpgradeEnding(ctx context.Context, config *redisv1.RedkeyConfig) (reconcileSchedule, error) {
 	// The extra primary sits right after all original pods (primaries + replicas)
-	extraOrdinal := int32(config.Spec.Primaries + config.Spec.Primaries*config.Spec.ReplicasPerPrimary)
+	extraOrdinal := config.Spec.Primaries + config.Spec.Primaries*config.Spec.ReplicasPerPrimary
 
 	password := cr.getPassword(ctx, config)
 
@@ -885,7 +885,7 @@ func (cr *ClusterReconciler) handleUpgradeEnding(ctx context.Context, config *re
 // handleUpgradeScalingDown scales the StatefulSet back to the original size, restores
 // the RollingUpdate strategy, runs a health check, and transitions to Ready.
 func (cr *ClusterReconciler) handleUpgradeScalingDown(ctx context.Context, config *redisv1.RedkeyConfig) (reconcileSchedule, error) {
-	originalTotal := int32(config.Spec.Primaries + (config.Spec.Primaries * config.Spec.ReplicasPerPrimary))
+	originalTotal := config.Spec.Primaries + (config.Spec.Primaries * config.Spec.ReplicasPerPrimary)
 
 	cr.logger.Info("Rolling upgrade: scaling down to original size", "targetTotal", originalTotal)
 
@@ -1454,7 +1454,7 @@ func (cr *ClusterReconciler) rebalanceReplicas(ctx context.Context, config *redi
 
 // forgetExtraReplicas forgets extra replica nodes that were part of the upgrade scale-up.
 func (cr *ClusterReconciler) forgetExtraReplicas(ctx context.Context, config *redisv1.RedkeyConfig, password string) error {
-	extraPrimaryOrdinal := int32(config.Spec.Primaries + config.Spec.Primaries*config.Spec.ReplicasPerPrimary)
+	extraPrimaryOrdinal := config.Spec.Primaries + config.Spec.Primaries*config.Spec.ReplicasPerPrimary
 	allMembers := int(config.Spec.Primaries + config.Spec.Primaries*config.Spec.ReplicasPerPrimary)
 
 	// Get the extra primary's ID

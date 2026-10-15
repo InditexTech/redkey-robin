@@ -65,7 +65,7 @@ func (r *Reconciler) selectConfig(ctx context.Context) (previousConfig *redisv1.
 	target := selected
 	supersedingResult := ApplySuperseding(configs, selected)
 	if len(supersedingResult.Superseded) > 0 {
-		target = r.applySupersedingStatus(ctx, selected, supersedingResult)
+		target = r.applySupersedingStatus(ctx, supersedingResult)
 	}
 
 	return previous, target, nil
@@ -109,7 +109,7 @@ func (r *Reconciler) initConfigPhase(ctx context.Context, cfg *redisv1.RedkeyCon
 // supersedingResult.Superseded, in order. If a write fails, it stops and
 // returns the config that failed (which is still Pending and becomes the
 // active config). On full success it returns supersedingResult.Selected.
-func (r *Reconciler) applySupersedingStatus(ctx context.Context, originalSelected *redisv1.RedkeyConfig, sr SupersedingResult) *redisv1.RedkeyConfig {
+func (r *Reconciler) applySupersedingStatus(ctx context.Context, sr SupersedingResult) *redisv1.RedkeyConfig {
 	for _, cfg := range sr.Superseded {
 		r.logger.Info("Superseding configuration",
 			"name", cfg.Name, "sequence", cfg.Spec.Sequence)

@@ -21,7 +21,7 @@ import (
 )
 
 // standaloneOwner creates a standalone-mode Redkey owner.
-func standaloneOwner(primaries int32) *redisv1.Redkey {
+func standaloneOwner(primaries int32) {
 	owner := &redisv1.Redkey{
 		ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: testNamespace},
 		Spec: redisv1.RedkeySpec{
@@ -33,7 +33,6 @@ func standaloneOwner(primaries int32) *redisv1.Redkey {
 		},
 	}
 	Expect(k8sClient.Create(ctx, owner)).To(Succeed())
-	return owner
 }
 
 // newStandaloneConfig builds a standalone-mode config with the given sequence and topology.
@@ -59,7 +58,7 @@ func newStandaloneConfig(name string, seq int, primaries int32) *redisv1.RedkeyC
 
 // createAppliedStandaloneConfig creates a standalone config already in the
 // Applied/Ready state, simulating an existing standalone cluster.
-func createAppliedStandaloneConfig(name string, seq int, primaries int32) *redisv1.RedkeyConfig {
+func createAppliedStandaloneConfig(name string, seq int, primaries int32) {
 	cfg := newStandaloneConfig(name, seq, primaries)
 	Expect(k8sClient.Create(ctx, cfg)).To(Succeed())
 	cfg.Status = redisv1.RedkeyConfigStatus{
@@ -68,7 +67,6 @@ func createAppliedStandaloneConfig(name string, seq int, primaries int32) *redis
 		Nodes:       map[string]*redisv1.RedisNode{},
 	}
 	Expect(k8sClient.Status().Update(ctx, cfg)).To(Succeed())
-	return cfg
 }
 
 var _ = Describe("Standalone Deployment (integration)", func() {
@@ -84,7 +82,7 @@ var _ = Describe("Standalone Deployment (integration)", func() {
 			cfg := newStandaloneConfig("standalone-new-1", 1, 1)
 			createAndSetPhase(cfg, redisv1.ConfigPhasePending)
 
-			rec := newIntegrationReconciler(clusterName, newTestRuntimeConfig())
+			rec := newIntegrationReconciler(newTestRuntimeConfig())
 			loopCancel, errCh := startReconcilerLoop(rec)
 			DeferCleanup(stopReconcilerLoop, loopCancel, errCh)
 
@@ -125,7 +123,7 @@ var _ = Describe("Standalone Deployment (integration)", func() {
 			cfg := newStandaloneConfig("standalone-nopdb-1", 1, 1)
 			createAndSetPhase(cfg, redisv1.ConfigPhasePending)
 
-			rec := newIntegrationReconciler(clusterName, newTestRuntimeConfig())
+			rec := newIntegrationReconciler(newTestRuntimeConfig())
 			loopCancel, errCh := startReconcilerLoop(rec)
 			DeferCleanup(stopReconcilerLoop, loopCancel, errCh)
 
@@ -157,7 +155,7 @@ var _ = Describe("Standalone Deployment (integration)", func() {
 			}
 			Expect(k8sClient.Status().Update(ctx, target)).To(Succeed())
 
-			rec := newIntegrationReconciler(clusterName, newTestRuntimeConfig())
+			rec := newIntegrationReconciler(newTestRuntimeConfig())
 			loopCancel, errCh := startReconcilerLoop(rec)
 			DeferCleanup(stopReconcilerLoop, loopCancel, errCh)
 
@@ -182,7 +180,7 @@ var _ = Describe("Standalone Deployment (integration)", func() {
 			}
 			Expect(k8sClient.Status().Update(ctx, target)).To(Succeed())
 
-			rec := newIntegrationReconciler(clusterName, newTestRuntimeConfig())
+			rec := newIntegrationReconciler(newTestRuntimeConfig())
 			loopCancel, errCh := startReconcilerLoop(rec)
 			DeferCleanup(stopReconcilerLoop, loopCancel, errCh)
 
@@ -217,7 +215,7 @@ var _ = Describe("Standalone Deployment (integration)", func() {
 			cfg.Spec.Auth.SecretName = "standalone-auth-secret"
 			createAndSetPhase(cfg, redisv1.ConfigPhasePending)
 
-			rec := newIntegrationReconciler(clusterName, newTestRuntimeConfig())
+			rec := newIntegrationReconciler(newTestRuntimeConfig())
 			loopCancel, errCh := startReconcilerLoop(rec)
 			DeferCleanup(stopReconcilerLoop, loopCancel, errCh)
 

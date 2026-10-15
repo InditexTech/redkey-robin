@@ -27,7 +27,7 @@ const (
 	interval      = 250 * time.Millisecond
 )
 
-func newConfig(name string, seq int, phase string, primaries, replicas int32) *redisv1.RedkeyConfig {
+func newConfig(name string, seq int, primaries, replicas int32) *redisv1.RedkeyConfig {
 	return &redisv1.RedkeyConfig{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -107,7 +107,7 @@ var _ = Describe("Configuration Selection (integration)", func() {
 	})
 
 	It("selects the single config when only one exists (recently created - No Phase)", func() {
-		cfg := newConfig("sel-single-1", 1, "", 3, 1)
+		cfg := newConfig("sel-single-1", 1, 3, 1)
 		createAndSetPhase(cfg, "")
 
 		configs := listSorted()
@@ -117,7 +117,7 @@ var _ = Describe("Configuration Selection (integration)", func() {
 	})
 
 	It("selects the single config when only one exists", func() {
-		cfg := newConfig("sel-single-1", 1, "", 3, 1)
+		cfg := newConfig("sel-single-1", 1, 3, 1)
 		createAndSetPhase(cfg, redisv1.ConfigPhasePending)
 
 		configs := listSorted()
@@ -127,13 +127,13 @@ var _ = Describe("Configuration Selection (integration)", func() {
 	})
 
 	It("selects the first non-Applied config (recently created - No Phase)", func() {
-		cfg1 := newConfig("sel-first-1", 1, "", 3, 1)
+		cfg1 := newConfig("sel-first-1", 1, 3, 1)
 		createAndSetPhase(cfg1, redisv1.ConfigPhaseApplied)
 
-		cfg2 := newConfig("sel-first-2", 2, "", 5, 1)
+		cfg2 := newConfig("sel-first-2", 2, 5, 1)
 		createAndSetPhase(cfg2, "")
 
-		cfg3 := newConfig("sel-first-3", 3, "", 7, 1)
+		cfg3 := newConfig("sel-first-3", 3, 7, 1)
 		createAndSetPhase(cfg3, "")
 
 		configs := listSorted()
@@ -143,13 +143,13 @@ var _ = Describe("Configuration Selection (integration)", func() {
 	})
 
 	It("selects the first non-Applied config", func() {
-		cfg1 := newConfig("sel-first-1", 1, "", 3, 1)
+		cfg1 := newConfig("sel-first-1", 1, 3, 1)
 		createAndSetPhase(cfg1, redisv1.ConfigPhaseApplied)
 
-		cfg2 := newConfig("sel-first-2", 2, "", 5, 1)
+		cfg2 := newConfig("sel-first-2", 2, 5, 1)
 		createAndSetPhase(cfg2, redisv1.ConfigPhasePending)
 
-		cfg3 := newConfig("sel-first-3", 3, "", 7, 1)
+		cfg3 := newConfig("sel-first-3", 3, 7, 1)
 		createAndSetPhase(cfg3, redisv1.ConfigPhasePending)
 
 		configs := listSorted()
@@ -159,10 +159,10 @@ var _ = Describe("Configuration Selection (integration)", func() {
 	})
 
 	It("selects the highest-sequence config when all are Applied", func() {
-		cfg1 := newConfig("sel-all-1", 1, "", 3, 1)
+		cfg1 := newConfig("sel-all-1", 1, 3, 1)
 		createAndSetPhase(cfg1, redisv1.ConfigPhaseApplied)
 
-		cfg2 := newConfig("sel-all-2", 2, "", 5, 1)
+		cfg2 := newConfig("sel-all-2", 2, 5, 1)
 		createAndSetPhase(cfg2, redisv1.ConfigPhaseApplied)
 
 		configs := listSorted()
@@ -172,13 +172,13 @@ var _ = Describe("Configuration Selection (integration)", func() {
 	})
 
 	It("selects the InProgress config over later Pending ones", func() {
-		cfg1 := newConfig("sel-ip-1", 1, "", 3, 1)
+		cfg1 := newConfig("sel-ip-1", 1, 3, 1)
 		createAndSetPhase(cfg1, redisv1.ConfigPhaseApplied)
 
-		cfg2 := newConfig("sel-ip-2", 2, "", 5, 1)
+		cfg2 := newConfig("sel-ip-2", 2, 5, 1)
 		createAndSetPhase(cfg2, redisv1.ConfigPhaseInProgress)
 
-		cfg3 := newConfig("sel-ip-3", 3, "", 7, 1)
+		cfg3 := newConfig("sel-ip-3", 3, 7, 1)
 		createAndSetPhase(cfg3, redisv1.ConfigPhasePending)
 
 		configs := listSorted()

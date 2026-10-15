@@ -65,7 +65,7 @@ var _ = Describe("Object Overrides (integration)", func() {
 		It("applies pod template scheduling fields while preserving identity", func() {
 			createOwner()
 
-			cfg := newConfig("override-sts-1", 1, "", 3, 0)
+			cfg := newConfig("override-sts-1", 1, 3, 0)
 			cfg.Spec.Ephemeral = true
 			cfg.Spec.Override = &redisv1.RedkeyOverrideSpec{
 				StatefulSet: &redisv1.PartialStatefulSet{
@@ -86,7 +86,7 @@ var _ = Describe("Object Overrides (integration)", func() {
 			}
 			createAndSetPhase(cfg, redisv1.ConfigPhasePending)
 
-			rec := newIntegrationReconciler(clusterName, newTestRuntimeConfig())
+			rec := newIntegrationReconciler(newTestRuntimeConfig())
 			loopCancel, errCh := startReconcilerLoop(rec)
 			DeferCleanup(stopReconcilerLoop, loopCancel, errCh)
 
@@ -113,7 +113,7 @@ var _ = Describe("Object Overrides (integration)", func() {
 		It("applies extra ports and annotations while staying headless", func() {
 			createOwner()
 
-			cfg := newConfig("override-svc-1", 1, "", 3, 0)
+			cfg := newConfig("override-svc-1", 1, 3, 0)
 			cfg.Spec.Ephemeral = true
 			cfg.Spec.Override = &redisv1.RedkeyOverrideSpec{
 				Service: &redisv1.PartialService{
@@ -129,7 +129,7 @@ var _ = Describe("Object Overrides (integration)", func() {
 			}
 			createAndSetPhase(cfg, redisv1.ConfigPhasePending)
 
-			rec := newIntegrationReconciler(clusterName, newTestRuntimeConfig())
+			rec := newIntegrationReconciler(newTestRuntimeConfig())
 			loopCancel, errCh := startReconcilerLoop(rec)
 			DeferCleanup(stopReconcilerLoop, loopCancel, errCh)
 
@@ -158,11 +158,11 @@ var _ = Describe("Object Overrides (integration)", func() {
 		It("creates default objects with no extra scheduling fields", func() {
 			createOwner()
 
-			cfg := newConfig("override-none-1", 1, "", 3, 0)
+			cfg := newConfig("override-none-1", 1, 3, 0)
 			cfg.Spec.Ephemeral = true
 			createAndSetPhase(cfg, redisv1.ConfigPhasePending)
 
-			rec := newIntegrationReconciler(clusterName, newTestRuntimeConfig())
+			rec := newIntegrationReconciler(newTestRuntimeConfig())
 			loopCancel, errCh := startReconcilerLoop(rec)
 			DeferCleanup(stopReconcilerLoop, loopCancel, errCh)
 
@@ -195,7 +195,7 @@ var _ = Describe("Object Overrides (integration)", func() {
 			Expect(k8sClient.Create(ctx, owner)).To(Succeed())
 
 			// Create the initial cluster objects with no override (creation path).
-			cfg := newConfig("override-upgrade-1", 1, "", 3, 0)
+			cfg := newConfig("override-upgrade-1", 1, 3, 0)
 			cfg.Spec.Ephemeral = true
 			Expect(kubernetes.EnsureClusterObjects(ctx, k8sClient, cfg, owner, "")).To(Succeed())
 
@@ -230,7 +230,8 @@ var _ = Describe("Object Overrides (integration)", func() {
 			}
 
 			checksum := kubernetes.ComputeConfigChecksum(cfg.Spec.Image, cfg.Spec.Version, cfg.Spec.RedisConfig)
-			Expect(kubernetes.UpdateStatefulSetTemplate(ctx, k8sClient, clusterName, testNamespace, cfg, owner, checksum)).To(Succeed())
+			Expect(kubernetes.UpdateStatefulSetTemplate(
+				ctx, k8sClient, clusterName, testNamespace, cfg, owner, checksum)).To(Succeed())
 
 			Expect(k8sClient.Get(ctx, stsKey, &sts)).To(Succeed())
 
@@ -256,7 +257,8 @@ var _ = Describe("Object Overrides (integration)", func() {
 
 			// Removing the override reverts the StatefulSet while the cluster label survives.
 			cfg.Spec.Override = nil
-			Expect(kubernetes.UpdateStatefulSetTemplate(ctx, k8sClient, clusterName, testNamespace, cfg, owner, checksum)).To(Succeed())
+			Expect(kubernetes.UpdateStatefulSetTemplate(
+				ctx, k8sClient, clusterName, testNamespace, cfg, owner, checksum)).To(Succeed())
 
 			Expect(k8sClient.Get(ctx, stsKey, &sts)).To(Succeed())
 			Expect(sts.Annotations).NotTo(HaveKey("backup.io/enabled"))
