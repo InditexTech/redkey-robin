@@ -1,0 +1,30 @@
+CHANGELOG.md
+  h_daebd220e3f9d7 17
+internal/reconciler/health_reconciler.go
+  h_daebd220e3f9d7 320,411
+internal/reconciler/health_reconciler_coverage_test.go
+  h_daebd220e3f9d7 294-303
+internal/reconciler/upgrade_reconciler.go
+  h_daebd220e3f9d7 1520
+internal/redis/cluster_reshard.go
+  h_daebd220e3f9d7 76-77,82,85-86,92-104
+internal/redis/cluster_reshard_test.go
+  h_daebd220e3f9d7 110-116,149,151,153-155,157-166,169-173
+internal/redis/fuzz_test.go
+  h_daebd220e3f9d7 22-23,26-28,38-46
+internal/redis/slot_ranges.go
+  h_daebd220e3f9d7 43,64,74
+internal/redis/slot_ranges_test.go
+  h_daebd220e3f9d7 44-76
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2fee07bc07bd30395b5786f448a831ac94447306",
+  "prompts": {},
+  "humans": {
+    "h_daebd220e3f9d7": {
+      "author": "Alberto Martínez Pérez <albertompe@ext.inditex.com>"
+    }
+  }
+}
