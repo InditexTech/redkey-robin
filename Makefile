@@ -145,7 +145,7 @@ test-all: test test-integration ## Run all tests (unit + integration).
 FUZZTIME ?= 30s
 .PHONY: fuzz
 fuzz: ## Run each Go fuzz target for FUZZTIME (e.g. make fuzz FUZZTIME=10s).
-	@for f in FuzzParseSlotRanges FuzzCountSlotsFromRanges FuzzParseOpenSlots FuzzParseClusterNodesOutput FuzzParseClusterCheckOutput; do \
+	@for f in FuzzParseSlotRanges FuzzCountSlotsFromRanges FuzzParseClusterNodesOutput FuzzParseClusterCheckOutput; do \
 		go test ./internal/redis/ -run='^$$' -fuzz="^$$f$$" -fuzztime=$(FUZZTIME) || exit 1; \
 	done
 

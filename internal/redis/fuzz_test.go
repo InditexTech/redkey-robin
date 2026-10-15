@@ -50,23 +50,6 @@ func FuzzCountSlotsFromRanges(f *testing.F) {
 	})
 }
 
-func FuzzParseOpenSlots(f *testing.F) {
-	for _, s := range []string{"[123->-abc]", "[456-<-def] 0-100", "[", "[]", "[99999999999999999999->-x]"} {
-		f.Add(s)
-	}
-	f.Fuzz(func(t *testing.T, s string) {
-		slots := ParseOpenSlots(s)
-		if len(slots) > len(splitFields(s)) {
-			t.Fatalf("ParseOpenSlots(%q) returned more slots (%d) than fields", s, len(slots))
-		}
-		for _, slot := range slots {
-			if slot < 0 {
-				t.Fatalf("ParseOpenSlots(%q) returned negative slot %d", s, slot)
-			}
-		}
-	})
-}
-
 func FuzzParseClusterNodesOutput(f *testing.F) {
 	f.Add("07c37dfeb235213a872192d90877d0cd55635b91 127.0.0.1:30004@31004 slave e7d1eecce10fd6bb5eb35b9f99a514335d9ba9ca 0 1426238317239 4 connected\n" +
 		"e7d1eecce10fd6bb5eb35b9f99a514335d9ba9ca 127.0.0.1:30001@31001 myself,master - 0 0 1 connected 0-5460 [123->-abc]")

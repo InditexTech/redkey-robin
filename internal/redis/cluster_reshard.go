@@ -102,33 +102,6 @@ func OwnsSlots(slotStr string) bool {
 	return false
 }
 
-// ParseOpenSlots extracts slot numbers that are in a migrating or importing state
-// from the Slots field of a ClusterNode. These are in the format [<slot>->-<nodeID>]
-// (migrating) or [<slot>-<-<nodeID>] (importing).
-func ParseOpenSlots(slotStr string) []int {
-	var slots []int
-	for _, part := range splitFields(slotStr) {
-		if len(part) < 2 || part[0] != '[' {
-			continue
-		}
-		// Extract slot number from [<slot>->-<id>] or [<slot>-<-<id>]
-		inner := part[1:] // strip leading '['
-		idx := 0
-		for idx < len(inner) && inner[idx] >= '0' && inner[idx] <= '9' {
-			idx++
-		}
-		if idx == 0 {
-			continue
-		}
-		slot, err := strconv.Atoi(inner[:idx])
-		if err != nil {
-			continue
-		}
-		slots = append(slots, slot)
-	}
-	return slots
-}
-
 // splitFields splits a string by whitespace (same as strings.Fields but avoids import for this file).
 func splitFields(s string) []string {
 	var fields []string

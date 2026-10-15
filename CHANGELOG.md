@@ -21,3 +21,5 @@ Format is based on [Keep a Changelog](http://keepachangelog.com/).
 - Bump golangci-lint to v2.14.0 and add a `.golangci.yml` aligned with Redkey Operator.
 - Bump the bundled `redis-cli` to 8.10.2.
 - Pin envtest to Kubernetes 1.33 (production target).
+### Removed
+- Unused `redis.ParseOpenSlots` helper and its fuzz target.
