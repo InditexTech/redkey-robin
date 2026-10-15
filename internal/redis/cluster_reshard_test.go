@@ -107,6 +107,13 @@ func TestCountSlotsFromRanges(t *testing.T) {
 		{"importing marker skipped", "[123->-abc123] 0-100", 101},
 		{"migrating marker skipped", "[456-<-def456] 500-600", 101},
 		{"with whitespace", "  0-99  200-299  ", 200},
+		{"slot boundaries", "0 16383 1-16382", 16384},
+		{"reversed range ignored", "100-5 0-9", 10},
+		{"non-numeric token ignored", "abc 0-9", 10},
+		{"comma-joined token ignored", "5,6 0-9", 10},
+		{"out-of-range slot ignored", "16384 0-9", 10},
+		{"out-of-range range ignored", "0-16384 0-9", 10},
+		{"overflowing range ignored", "0-9223372036854775807", 0},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -139,24 +146,30 @@ func TestSplitFields(t *testing.T) {
 	}
 }
 
-// --- cutString ---
+// --- OwnsSlots ---
 
-func TestCutString(t *testing.T) {
+func TestOwnsSlots(t *testing.T) {
 	cases := []struct {
-		s, sep        string
-		before, after string
-		found         bool
+		name  string
+		input string
+		want  bool
 	}{
-		{"0-5460", "-", "0", "5460", true},
-		{"single", "-", "single", "", false},
-		{"a--b", "--", "a", "b", true},
-		{"", "-", "", "", false},
+		{"empty", "", false},
+		{"whitespace only", "  \t ", false},
+		{"single slot", "42", true},
+		{"range", "0-5460", true},
+		{"only migrating marker", "[123->-abc123]", false},
+		{"only importing marker", "[456-<-def456]", false},
+		{"markers and range", "[123->-abc123] 0-100", true},
+		{"malformed token is conservatively treated as ownership", "abc", true},
+		{"reversed range is conservatively treated as ownership", "100-5", true},
+		{"out-of-range slot is conservatively treated as ownership", "16384", true},
 	}
 	for _, tc := range cases {
-		before, after, found := cutString(tc.s, tc.sep)
-		if before != tc.before || after != tc.after || found != tc.found {
-			t.Fatalf("cutString(%q, %q) = (%q, %q, %v), want (%q, %q, %v)",
-				tc.s, tc.sep, before, after, found, tc.before, tc.after, tc.found)
-		}
+		t.Run(tc.name, func(t *testing.T) {
+			if got := OwnsSlots(tc.input); got != tc.want {
+				t.Fatalf("OwnsSlots(%q) = %v, want %v", tc.input, got, tc.want)
+			}
+		})
 	}
 }

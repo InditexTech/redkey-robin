@@ -73,31 +73,33 @@ func (c *Client) CountSlotsForNode(ctx context.Context, nodeID string) (int, err
 }
 
 // CountSlotsFromRanges parses a slot range string (e.g. "0-5460 10923-16383") and
-// returns the total number of individual slots covered.
+// returns the total number of individual slots covered. Migrating/importing markers
+// and malformed or out-of-range tokens are ignored.
 func CountSlotsFromRanges(slotStr string) int {
-	if slotStr == "" {
-		return 0
-	}
 	total := 0
 	for _, part := range splitFields(slotStr) {
 		// Skip importing/migrating markers like [123->-nodeID] or [123-<-nodeID].
-		if len(part) > 0 && part[0] == '[' {
+		if part[0] == '[' {
 			continue
 		}
-		lo, hi, found := cutString(part, "-")
-		if !found {
-			// Single slot.
-			total++
-			continue
+		if rng, err := parseSlotToken(part); err == nil {
+			total += rng.End - rng.Start + 1
 		}
-		loVal, err1 := strconv.Atoi(lo)
-		hiVal, err2 := strconv.Atoi(hi)
-		if err1 != nil || err2 != nil {
-			continue
-		}
-		total += hiVal - loVal + 1
 	}
 	return total
+}
+
+// OwnsSlots reports whether a CLUSTER NODES slot field lists any slot ownership entry,
+// ignoring migrating/importing markers ("[...]"). Unlike CountSlotsFromRanges it does not
+// validate the entries: anything unparseable is treated as ownership, so guards against
+// destructive operations (e.g. CLUSTER FORGET) stay conservative on unexpected input.
+func OwnsSlots(slotStr string) bool {
+	for _, part := range splitFields(slotStr) {
+		if part[0] != '[' {
+			return true
+		}
+	}
+	return false
 }
 
 // ParseOpenSlots extracts slot numbers that are in a migrating or importing state
@@ -145,16 +147,6 @@ func splitFields(s string) []string {
 		fields = append(fields, s[start:])
 	}
 	return fields
-}
-
-// cutString is a minimal strings.Cut equivalent for this file.
-func cutString(s, sep string) (before, after string, found bool) {
-	for i := range s {
-		if i+len(sep) <= len(s) && s[i:i+len(sep)] == sep {
-			return s[:i], s[i+len(sep):], true
-		}
-	}
-	return s, "", false
 }
 
 // FlushAll executes FLUSHALL on the Redis node.

@@ -317,7 +317,7 @@ func (hr *HealthReconciler) promoteReplicaOfDeadMaster(ctx context.Context, clus
 func isForgettableNoaddrGhost(cn redis.ClusterNode) bool {
 	return cn.IP == "" &&
 		strings.Contains(cn.Flags, "noaddr") &&
-		redis.CountSlotsFromRanges(cn.Slots) == 0
+		!redis.OwnsSlots(cn.Slots)
 }
 
 // HealMembership reconciles cluster membership against the set of live pods provided in
@@ -408,7 +408,7 @@ func (hr *HealthReconciler) HealMembership(ctx context.Context, nodes []health.N
 		if expected && !staleGhost {
 			continue
 		}
-		ownsSlots := redis.CountSlotsFromRanges(cn.Slots) > 0
+		ownsSlots := redis.OwnsSlots(cn.Slots)
 		if ownsSlots {
 			// The stale node still owns slots. If it has a reachable replica, force that replica to
 			// take over: this preserves the slots (served by the replica's data copy) and, once the
