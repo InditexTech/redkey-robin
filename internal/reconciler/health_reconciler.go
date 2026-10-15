@@ -1167,9 +1167,7 @@ func (hr *HealthReconciler) remediatePrimaryDeficit(
 
 	// Re-MEET the reset nodes so they rejoin the cluster as empty primaries, then wait for
 	// gossip convergence before the next cycle rebalances slots onto them.
-	if err := hr.meetResetReplicas(ctx, promoted, nodes, password); err != nil {
-		return false, err
-	}
+	hr.meetResetReplicas(ctx, promoted, nodes, password)
 
 	meetWait := hr.runtimeConfig.ClusterMeetWait()
 	hr.logger.Info("Waiting for gossip convergence after promoting replicas", "duration", meetWait)
@@ -1187,7 +1185,7 @@ func (hr *HealthReconciler) remediatePrimaryDeficit(
 // issuing CLUSTER MEET toward each of them from every other cluster member, so gossip
 // re-admits them. Meets are best-effort: a single peer failure is logged and tolerated
 // because any successful meet is enough for the node to rejoin.
-func (hr *HealthReconciler) meetResetReplicas(ctx context.Context, resetNodes []replicaInfo, nodes []health.Node, password string) error {
+func (hr *HealthReconciler) meetResetReplicas(ctx context.Context, resetNodes []replicaInfo, nodes []health.Node, password string) {
 	resetIPs := make(map[string]struct{}, len(resetNodes))
 	for _, r := range resetNodes {
 		resetIPs[extractIP(r.addr)] = struct{}{}
@@ -1211,7 +1209,6 @@ func (hr *HealthReconciler) meetResetReplicas(ctx context.Context, resetNodes []
 			_ = peerClient.Close()
 		}
 	}
-	return nil
 }
 
 // --- Remediation: Cluster Check (Fix) ---

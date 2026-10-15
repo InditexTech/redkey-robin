@@ -17,7 +17,7 @@ import (
 	"github.com/inditextech/redkey-robin/internal/reconciler"
 )
 
-func newSkippableConfig(name string, seq int, phase string, primaries, replicas int32, skip bool) *redisv1.RedkeyConfig {
+func newSkippableConfig(name string, seq int, primaries, replicas int32, skip bool) *redisv1.RedkeyConfig {
 	return &redisv1.RedkeyConfig{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -42,13 +42,13 @@ var _ = Describe("Configuration Superseding (integration)", func() {
 	})
 
 	It("supersedes intermediate topology-only configs (recently created - No Phase)", func() {
-		cfg1 := newSkippableConfig("sup-chain-1", 1, "", 3, 1, false)
+		cfg1 := newSkippableConfig("sup-chain-1", 1, 3, 1, false)
 		createAndSetPhase(cfg1, redisv1.ConfigPhaseApplied)
 
-		cfg2 := newSkippableConfig("sup-chain-2", 2, "", 5, 1, true)
+		cfg2 := newSkippableConfig("sup-chain-2", 2, 5, 1, true)
 		createAndSetPhase(cfg2, "")
 
-		cfg3 := newSkippableConfig("sup-chain-3", 3, "", 7, 1, false)
+		cfg3 := newSkippableConfig("sup-chain-3", 3, 7, 1, false)
 		createAndSetPhase(cfg3, "")
 
 		configs := listSorted()
@@ -79,13 +79,13 @@ var _ = Describe("Configuration Superseding (integration)", func() {
 	})
 
 	It("supersedes intermediate topology-only configs", func() {
-		cfg1 := newSkippableConfig("sup-chain-1", 1, "", 3, 1, false)
+		cfg1 := newSkippableConfig("sup-chain-1", 1, 3, 1, false)
 		createAndSetPhase(cfg1, redisv1.ConfigPhaseApplied)
 
-		cfg2 := newSkippableConfig("sup-chain-2", 2, "", 5, 1, true)
+		cfg2 := newSkippableConfig("sup-chain-2", 2, 5, 1, true)
 		createAndSetPhase(cfg2, redisv1.ConfigPhasePending)
 
-		cfg3 := newSkippableConfig("sup-chain-3", 3, "", 7, 1, false)
+		cfg3 := newSkippableConfig("sup-chain-3", 3, 7, 1, false)
 		createAndSetPhase(cfg3, redisv1.ConfigPhasePending)
 
 		configs := listSorted()
@@ -116,13 +116,13 @@ var _ = Describe("Configuration Superseding (integration)", func() {
 	})
 
 	It("does not supersede when config has non-topology changes (recently created - No Phase)", func() {
-		cfg1 := newSkippableConfig("sup-nontopo-1", 1, "", 3, 1, false)
+		cfg1 := newSkippableConfig("sup-nontopo-1", 1, 3, 1, false)
 		createAndSetPhase(cfg1, redisv1.ConfigPhaseApplied)
 
-		cfg2 := newSkippableConfig("sup-nontopo-2", 2, "", 5, 1, true)
+		cfg2 := newSkippableConfig("sup-nontopo-2", 2, 5, 1, true)
 		createAndSetPhase(cfg2, "")
 
-		cfg3 := newSkippableConfig("sup-nontopo-3", 3, "", 7, 1, false)
+		cfg3 := newSkippableConfig("sup-nontopo-3", 3, 7, 1, false)
 		cfg3.Spec.Image = "redis:8" // non-topology change
 		createAndSetPhase(cfg3, "")
 
@@ -137,13 +137,13 @@ var _ = Describe("Configuration Superseding (integration)", func() {
 	})
 
 	It("does not supersede when config has non-topology changes", func() {
-		cfg1 := newSkippableConfig("sup-nontopo-1", 1, "", 3, 1, false)
+		cfg1 := newSkippableConfig("sup-nontopo-1", 1, 3, 1, false)
 		createAndSetPhase(cfg1, redisv1.ConfigPhaseApplied)
 
-		cfg2 := newSkippableConfig("sup-nontopo-2", 2, "", 5, 1, true)
+		cfg2 := newSkippableConfig("sup-nontopo-2", 2, 5, 1, true)
 		createAndSetPhase(cfg2, redisv1.ConfigPhasePending)
 
-		cfg3 := newSkippableConfig("sup-nontopo-3", 3, "", 7, 1, false)
+		cfg3 := newSkippableConfig("sup-nontopo-3", 3, 7, 1, false)
 		cfg3.Spec.Image = "redis:8" // non-topology change
 		createAndSetPhase(cfg3, redisv1.ConfigPhasePending)
 
@@ -158,16 +158,16 @@ var _ = Describe("Configuration Superseding (integration)", func() {
 	})
 
 	It("supersedes a chain of three topology-only configs (recently created - No Phase)", func() {
-		cfg1 := newSkippableConfig("sup-three-1", 1, "", 3, 1, false)
+		cfg1 := newSkippableConfig("sup-three-1", 1, 3, 1, false)
 		createAndSetPhase(cfg1, redisv1.ConfigPhaseApplied)
 
-		cfg2 := newSkippableConfig("sup-three-2", 2, "", 5, 1, true)
+		cfg2 := newSkippableConfig("sup-three-2", 2, 5, 1, true)
 		createAndSetPhase(cfg2, "")
 
-		cfg3 := newSkippableConfig("sup-three-3", 3, "", 7, 1, true)
+		cfg3 := newSkippableConfig("sup-three-3", 3, 7, 1, true)
 		createAndSetPhase(cfg3, "")
 
-		cfg4 := newSkippableConfig("sup-three-4", 4, "", 9, 2, false)
+		cfg4 := newSkippableConfig("sup-three-4", 4, 9, 2, false)
 		createAndSetPhase(cfg4, "")
 
 		configs := listSorted()
@@ -200,16 +200,16 @@ var _ = Describe("Configuration Superseding (integration)", func() {
 	})
 
 	It("supersedes a chain of three topology-only configs", func() {
-		cfg1 := newSkippableConfig("sup-three-1", 1, "", 3, 1, false)
+		cfg1 := newSkippableConfig("sup-three-1", 1, 3, 1, false)
 		createAndSetPhase(cfg1, redisv1.ConfigPhaseApplied)
 
-		cfg2 := newSkippableConfig("sup-three-2", 2, "", 5, 1, true)
+		cfg2 := newSkippableConfig("sup-three-2", 2, 5, 1, true)
 		createAndSetPhase(cfg2, redisv1.ConfigPhasePending)
 
-		cfg3 := newSkippableConfig("sup-three-3", 3, "", 7, 1, true)
+		cfg3 := newSkippableConfig("sup-three-3", 3, 7, 1, true)
 		createAndSetPhase(cfg3, "")
 
-		cfg4 := newSkippableConfig("sup-three-4", 4, "", 9, 2, false)
+		cfg4 := newSkippableConfig("sup-three-4", 4, 9, 2, false)
 		createAndSetPhase(cfg4, "")
 
 		configs := listSorted()
@@ -242,16 +242,16 @@ var _ = Describe("Configuration Superseding (integration)", func() {
 	})
 
 	It("stops chain when middle config lacks skipIfSuperseded", func() {
-		cfg1 := newSkippableConfig("sup-mid-1", 1, "", 3, 1, false)
+		cfg1 := newSkippableConfig("sup-mid-1", 1, 3, 1, false)
 		createAndSetPhase(cfg1, redisv1.ConfigPhaseApplied)
 
-		cfg2 := newSkippableConfig("sup-mid-2", 2, "", 5, 1, true)
+		cfg2 := newSkippableConfig("sup-mid-2", 2, 5, 1, true)
 		createAndSetPhase(cfg2, redisv1.ConfigPhasePending)
 
-		cfg3 := newSkippableConfig("sup-mid-3", 3, "", 7, 1, false) // no skip
+		cfg3 := newSkippableConfig("sup-mid-3", 3, 7, 1, false) // no skip
 		createAndSetPhase(cfg3, redisv1.ConfigPhasePending)
 
-		cfg4 := newSkippableConfig("sup-mid-4", 4, "", 9, 2, true)
+		cfg4 := newSkippableConfig("sup-mid-4", 4, 9, 2, true)
 		createAndSetPhase(cfg4, "")
 
 		configs := listSorted()
@@ -266,13 +266,13 @@ var _ = Describe("Configuration Superseding (integration)", func() {
 	})
 
 	It("does not supersede InProgress config (recently created - No Phase)", func() {
-		cfg1 := newSkippableConfig("sup-ip-1", 1, "", 3, 1, false)
+		cfg1 := newSkippableConfig("sup-ip-1", 1, 3, 1, false)
 		createAndSetPhase(cfg1, redisv1.ConfigPhaseApplied)
 
-		cfg2 := newSkippableConfig("sup-ip-2", 2, "", 5, 1, true)
+		cfg2 := newSkippableConfig("sup-ip-2", 2, 5, 1, true)
 		createAndSetPhase(cfg2, redisv1.ConfigPhaseInProgress)
 
-		cfg3 := newSkippableConfig("sup-ip-3", 3, "", 7, 1, false)
+		cfg3 := newSkippableConfig("sup-ip-3", 3, 7, 1, false)
 		createAndSetPhase(cfg3, "")
 
 		configs := listSorted()
@@ -285,13 +285,13 @@ var _ = Describe("Configuration Superseding (integration)", func() {
 	})
 
 	It("does not supersede InProgress config", func() {
-		cfg1 := newSkippableConfig("sup-ip-1", 1, "", 3, 1, false)
+		cfg1 := newSkippableConfig("sup-ip-1", 1, 3, 1, false)
 		createAndSetPhase(cfg1, redisv1.ConfigPhaseApplied)
 
-		cfg2 := newSkippableConfig("sup-ip-2", 2, "", 5, 1, true)
+		cfg2 := newSkippableConfig("sup-ip-2", 2, 5, 1, true)
 		createAndSetPhase(cfg2, redisv1.ConfigPhaseInProgress)
 
-		cfg3 := newSkippableConfig("sup-ip-3", 3, "", 7, 1, false)
+		cfg3 := newSkippableConfig("sup-ip-3", 3, 7, 1, false)
 		createAndSetPhase(cfg3, redisv1.ConfigPhasePending)
 
 		configs := listSorted()

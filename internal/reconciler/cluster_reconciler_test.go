@@ -159,7 +159,8 @@ func TestClusterReconciler_HandleReady_NoOp(t *testing.T) {
 		},
 	}
 
-	objs := []runtime.Object{owner, cfg}
+	objs := make([]runtime.Object, 0, 2+len(pods))
+	objs = append(objs, owner, cfg)
 	for i := range pods {
 		objs = append(objs, &pods[i])
 	}

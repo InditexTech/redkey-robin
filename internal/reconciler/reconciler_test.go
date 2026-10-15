@@ -581,7 +581,7 @@ func TestApplySupersedingStatus_Success(t *testing.T) {
 		Superseded: []*redisv1.RedkeyConfig{&fetchedCfg2},
 	}
 
-	result := r.applySupersedingStatus(context.Background(), cfg2, sr)
+	result := r.applySupersedingStatus(context.Background(), sr)
 	if result.Name != "cfg-target" {
 		t.Fatalf("expected cfg-target, got %s", result.Name)
 	}

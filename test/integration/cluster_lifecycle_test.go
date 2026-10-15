@@ -69,12 +69,12 @@ var _ = Describe("Cluster Lifecycle (integration)", func() {
 			Expect(k8sClient.Create(ctx, owner)).To(Succeed())
 
 			// Create a config with empty status (new cluster)
-			cfg := newConfig("lifecycle-new-1", 1, "", 3, 0)
+			cfg := newConfig("lifecycle-new-1", 1, 3, 0)
 			cfg.Spec.Ephemeral = true
 			createAndSetPhase(cfg, redisv1.ConfigPhasePending)
 
 			// Start reconciler
-			rec := newIntegrationReconciler(clusterName, newTestRuntimeConfig())
+			rec := newIntegrationReconciler(newTestRuntimeConfig())
 			loopCancel, errCh := startReconcilerLoop(rec)
 			DeferCleanup(stopReconcilerLoop, loopCancel, errCh)
 
@@ -129,11 +129,11 @@ var _ = Describe("Cluster Lifecycle (integration)", func() {
 			}
 			Expect(k8sClient.Create(ctx, owner)).To(Succeed())
 
-			cfg := newConfig("lifecycle-ownerref-1", 1, "", 3, 0)
+			cfg := newConfig("lifecycle-ownerref-1", 1, 3, 0)
 			cfg.Spec.Ephemeral = true
 			createAndSetPhase(cfg, redisv1.ConfigPhasePending)
 
-			rec := newIntegrationReconciler(clusterName, newTestRuntimeConfig())
+			rec := newIntegrationReconciler(newTestRuntimeConfig())
 			loopCancel, errCh := startReconcilerLoop(rec)
 			DeferCleanup(stopReconcilerLoop, loopCancel, errCh)
 
@@ -167,11 +167,11 @@ var _ = Describe("Cluster Lifecycle (integration)", func() {
 			}
 			Expect(k8sClient.Create(ctx, owner)).To(Succeed())
 
-			cfg := newConfig("lifecycle-wait-1", 1, "", 3, 0)
+			cfg := newConfig("lifecycle-wait-1", 1, 3, 0)
 			cfg.Spec.Ephemeral = true
 			createAndSetPhase(cfg, redisv1.ConfigPhasePending)
 
-			rec := newIntegrationReconciler(clusterName, newTestRuntimeConfig())
+			rec := newIntegrationReconciler(newTestRuntimeConfig())
 			loopCancel, errCh := startReconcilerLoop(rec)
 			DeferCleanup(stopReconcilerLoop, loopCancel, errCh)
 
@@ -220,12 +220,12 @@ var _ = Describe("Cluster Lifecycle (integration)", func() {
 			}
 			Expect(k8sClient.Create(ctx, owner)).To(Succeed())
 
-			cfg := newConfig("lifecycle-auth-1", 1, "", 3, 0)
+			cfg := newConfig("lifecycle-auth-1", 1, 3, 0)
 			cfg.Spec.Ephemeral = true
 			cfg.Spec.Auth.SecretName = "redis-auth"
 			createAndSetPhase(cfg, redisv1.ConfigPhasePending)
 
-			rec := newIntegrationReconciler(clusterName, newTestRuntimeConfig())
+			rec := newIntegrationReconciler(newTestRuntimeConfig())
 			loopCancel, errCh := startReconcilerLoop(rec)
 			DeferCleanup(stopReconcilerLoop, loopCancel, errCh)
 

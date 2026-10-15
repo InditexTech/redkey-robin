@@ -41,8 +41,8 @@ func newTestRuntimeConfig() *config.RuntimeConfig {
 	)
 }
 
-func newIntegrationReconciler(cluster string, rtConfig *config.RuntimeConfig) *reconciler.Reconciler {
-	return reconciler.NewReconciler(k8sClient, cluster, testNamespace, rtConfig)
+func newIntegrationReconciler(rtConfig *config.RuntimeConfig) *reconciler.Reconciler {
+	return reconciler.NewReconciler(k8sClient, clusterName, testNamespace, rtConfig)
 }
 
 var _ = Describe("Reconciler (integration)", func() {
@@ -52,10 +52,10 @@ var _ = Describe("Reconciler (integration)", func() {
 
 	Describe("Start loop processes configs end-to-end", func() {
 		It("transitions a Pending config to InProgress", func() {
-			cfg1 := newConfig("rec-cycle-1", 1, "", 3, 1)
+			cfg1 := newConfig("rec-cycle-1", 1, 3, 1)
 			createAndSetPhase(cfg1, redisv1.ConfigPhasePending)
 
-			rec := newIntegrationReconciler(clusterName, newTestRuntimeConfig())
+			rec := newIntegrationReconciler(newTestRuntimeConfig())
 			loopCancel, errCh := startReconcilerLoop(rec)
 			DeferCleanup(stopReconcilerLoop, loopCancel, errCh)
 
@@ -83,7 +83,7 @@ var _ = Describe("Reconciler (integration)", func() {
 			}
 			Expect(k8sClient.Create(ctx, cfg1)).To(Succeed())
 
-			rec := newIntegrationReconciler(clusterName, newTestRuntimeConfig())
+			rec := newIntegrationReconciler(newTestRuntimeConfig())
 			loopCancel, errCh := startReconcilerLoop(rec)
 			DeferCleanup(stopReconcilerLoop, loopCancel, errCh)
 
@@ -95,10 +95,10 @@ var _ = Describe("Reconciler (integration)", func() {
 		})
 
 		It("resumes an InProgress config without changing phase", func() {
-			cfg1 := newConfig("rec-resume-1", 1, "", 3, 1)
+			cfg1 := newConfig("rec-resume-1", 1, 3, 1)
 			createAndSetPhase(cfg1, redisv1.ConfigPhaseInProgress)
 
-			rec := newIntegrationReconciler(clusterName, newTestRuntimeConfig())
+			rec := newIntegrationReconciler(newTestRuntimeConfig())
 			loopCancel, errCh := startReconcilerLoop(rec)
 			DeferCleanup(stopReconcilerLoop, loopCancel, errCh)
 
@@ -110,16 +110,16 @@ var _ = Describe("Reconciler (integration)", func() {
 		})
 
 		It("selects the first non-Applied config when multiple exist", func() {
-			cfg1 := newConfig("rec-multi-1", 1, "", 3, 1)
+			cfg1 := newConfig("rec-multi-1", 1, 3, 1)
 			createAndSetPhase(cfg1, redisv1.ConfigPhaseApplied)
 
-			cfg2 := newConfig("rec-multi-2", 2, "", 5, 1)
+			cfg2 := newConfig("rec-multi-2", 2, 5, 1)
 			createAndSetPhase(cfg2, redisv1.ConfigPhasePending)
 
-			cfg3 := newConfig("rec-multi-3", 3, "", 7, 1)
+			cfg3 := newConfig("rec-multi-3", 3, 7, 1)
 			createAndSetPhase(cfg3, redisv1.ConfigPhasePending)
 
-			rec := newIntegrationReconciler(clusterName, newTestRuntimeConfig())
+			rec := newIntegrationReconciler(newTestRuntimeConfig())
 			loopCancel, errCh := startReconcilerLoop(rec)
 			DeferCleanup(stopReconcilerLoop, loopCancel, errCh)
 
@@ -135,19 +135,19 @@ var _ = Describe("Reconciler (integration)", func() {
 		})
 
 		It("supersedes intermediate configs and transitions final one to InProgress", func() {
-			cfg1 := newConfig("rec-sup-1", 1, "", 3, 1)
+			cfg1 := newConfig("rec-sup-1", 1, 3, 1)
 			createAndSetPhase(cfg1, redisv1.ConfigPhaseApplied)
 
-			cfg2 := newSkippableConfig("rec-sup-2", 2, "", 5, 1, true)
+			cfg2 := newSkippableConfig("rec-sup-2", 2, 5, 1, true)
 			createAndSetPhase(cfg2, redisv1.ConfigPhasePending)
 
-			cfg3 := newSkippableConfig("rec-sup-3", 3, "", 7, 1, true)
+			cfg3 := newSkippableConfig("rec-sup-3", 3, 7, 1, true)
 			createAndSetPhase(cfg3, redisv1.ConfigPhasePending)
 
-			cfg4 := newConfig("rec-sup-4", 4, "", 9, 2)
+			cfg4 := newConfig("rec-sup-4", 4, 9, 2)
 			createAndSetPhase(cfg4, redisv1.ConfigPhasePending)
 
-			rec := newIntegrationReconciler(clusterName, newTestRuntimeConfig())
+			rec := newIntegrationReconciler(newTestRuntimeConfig())
 			loopCancel, errCh := startReconcilerLoop(rec)
 			DeferCleanup(stopReconcilerLoop, loopCancel, errCh)
 
@@ -167,13 +167,13 @@ var _ = Describe("Reconciler (integration)", func() {
 		})
 
 		It("does not supersede when non-topology changes exist", func() {
-			cfg1 := newConfig("rec-nontopo-1", 1, "", 3, 1)
+			cfg1 := newConfig("rec-nontopo-1", 1, 3, 1)
 			createAndSetPhase(cfg1, redisv1.ConfigPhaseApplied)
 
-			cfg2 := newSkippableConfig("rec-nontopo-2", 2, "", 5, 1, true)
+			cfg2 := newSkippableConfig("rec-nontopo-2", 2, 5, 1, true)
 			createAndSetPhase(cfg2, redisv1.ConfigPhasePending)
 
-			cfg3 := newSkippableConfig("rec-nontopo-3", 3, "", 7, 1, false)
+			cfg3 := newSkippableConfig("rec-nontopo-3", 3, 7, 1, false)
 			cfg3.Spec.Image = "redis:8" // non-topology change
 			Expect(k8sClient.Create(ctx, cfg3)).To(Succeed())
 			cfg3.Status = redisv1.RedkeyConfigStatus{
@@ -182,7 +182,7 @@ var _ = Describe("Reconciler (integration)", func() {
 			}
 			Expect(k8sClient.Status().Update(ctx, cfg3)).To(Succeed())
 
-			rec := newIntegrationReconciler(clusterName, newTestRuntimeConfig())
+			rec := newIntegrationReconciler(newTestRuntimeConfig())
 			loopCancel, errCh := startReconcilerLoop(rec)
 			DeferCleanup(stopReconcilerLoop, loopCancel, errCh)
 
@@ -198,7 +198,7 @@ var _ = Describe("Reconciler (integration)", func() {
 		})
 
 		It("stops cleanly with no configs", func() {
-			rec := newIntegrationReconciler(clusterName, newTestRuntimeConfig())
+			rec := newIntegrationReconciler(newTestRuntimeConfig())
 			loopCancel, errCh := startReconcilerLoop(rec)
 			DeferCleanup(stopReconcilerLoop, loopCancel, errCh)
 
@@ -208,16 +208,16 @@ var _ = Describe("Reconciler (integration)", func() {
 		})
 
 		It("does not supersede an InProgress config even with later pending ones", func() {
-			cfg1 := newConfig("rec-ip-1", 1, "", 3, 1)
+			cfg1 := newConfig("rec-ip-1", 1, 3, 1)
 			createAndSetPhase(cfg1, redisv1.ConfigPhaseApplied)
 
-			cfg2 := newSkippableConfig("rec-ip-2", 2, "", 5, 1, true)
+			cfg2 := newSkippableConfig("rec-ip-2", 2, 5, 1, true)
 			createAndSetPhase(cfg2, redisv1.ConfigPhaseInProgress)
 
-			cfg3 := newConfig("rec-ip-3", 3, "", 7, 1)
+			cfg3 := newConfig("rec-ip-3", 3, 7, 1)
 			createAndSetPhase(cfg3, redisv1.ConfigPhasePending)
 
-			rec := newIntegrationReconciler(clusterName, newTestRuntimeConfig())
+			rec := newIntegrationReconciler(newTestRuntimeConfig())
 			loopCancel, errCh := startReconcilerLoop(rec)
 			DeferCleanup(stopReconcilerLoop, loopCancel, errCh)
 

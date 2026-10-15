@@ -28,13 +28,13 @@ Today, Robin focuses on orchestration of `RedkeyConfig` progression rather than 
 
 | Layer | Technology |
 | ----- | ---------- |
-| Language | Go 1.26.8 |
+| Language | Go 1.27.2 |
 | Runtime style | Standalone controller-style daemon |
-| Kubernetes client | [controller-runtime](https://sigs.k8s.io/controller-runtime) v0.24.0 |
+| Kubernetes client | [controller-runtime](https://sigs.k8s.io/controller-runtime) v0.25.2 |
 | API dependency | `github.com/inditextech/redkey-operator/api/v1beta1` via local `replace ../redkey-operator` |
 | Metrics | [Prometheus client_golang](https://github.com/prometheus/client_golang) |
 | Testing | Go `testing`, [Ginkgo v2](https://github.com/onsi/ginkgo) + [Gomega](https://github.com/onsi/gomega), [envtest](https://sigs.k8s.io/controller-runtime/tools/setup-envtest) |
-| Linting | [golangci-lint](https://github.com/golangci/golangci-lint) v2.1.0 |
+| Linting | [golangci-lint](https://github.com/golangci/golangci-lint) v2.14.0 |
 
 ---
 
@@ -79,7 +79,7 @@ This repository does not use Maven. There is no `pom.xml` or `mvnw` in Robin, so
 
 ### Prerequisites (installed manually)
 
-- Go 1.26+
+- Go 1.27+
 - Make
 - Docker or Podman (only needed for image build targets)
 - Access to the sibling `../redkey-operator` checkout, because this module imports its API types through a local `replace`

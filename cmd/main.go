@@ -53,10 +53,14 @@ func main() {
 	flag.StringVar(&namespace, "namespace", "", "Namespace of the Redkey (required)")
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metrics endpoint binds to")
 	flag.StringVar(&logLevel, "log-level", "info", "Log level: debug, info, warn, error")
-	flag.BoolVar(&enablePprof, "enable-pprof", false, "Enable pprof profiling endpoints on the metrics server (do not use in production unless debugging)")
-	flag.DurationVar(&reconcileInterval, "reconcile-interval", defaultReconcileInterval, "Polling interval for the reconciliation loop")
-	flag.DurationVar(&reconcileIntervalOnError, "reconcile-interval-on-error", defaultReconcileIntervalOnError, "Polling interval for the reconciliation loop when an error occurs")
-	flag.DurationVar(&reconcileIntervalOnWait, "reconcile-interval-on-wait", defaultReconcileIntervalOnWait, "Polling interval for the reconciliation loop while waiting for convergence")
+	flag.BoolVar(&enablePprof, "enable-pprof", false,
+		"Enable pprof profiling endpoints on the metrics server (do not use in production unless debugging)")
+	flag.DurationVar(&reconcileInterval, "reconcile-interval", defaultReconcileInterval,
+		"Polling interval for the reconciliation loop")
+	flag.DurationVar(&reconcileIntervalOnError, "reconcile-interval-on-error", defaultReconcileIntervalOnError,
+		"Polling interval for the reconciliation loop when an error occurs")
+	flag.DurationVar(&reconcileIntervalOnWait, "reconcile-interval-on-wait", defaultReconcileIntervalOnWait,
+		"Polling interval for the reconciliation loop while waiting for convergence")
 	flag.Parse()
 
 	var slogLevel slog.Level

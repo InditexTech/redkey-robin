@@ -19,7 +19,7 @@ import (
 
 // scalingOwner creates the Redkey owner used by the scaling reconciler when it
 // needs to (re)create cluster objects.
-func scalingOwner(primaries, replicas int32, purge *bool) *redisv1.Redkey {
+func scalingOwner(primaries, replicas int32, purge *bool) {
 	owner := &redisv1.Redkey{
 		ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: testNamespace},
 		Spec: redisv1.RedkeySpec{
@@ -31,7 +31,6 @@ func scalingOwner(primaries, replicas int32, purge *bool) *redisv1.Redkey {
 		},
 	}
 	Expect(k8sClient.Create(ctx, owner)).To(Succeed())
-	return owner
 }
 
 // scalingStatefulSet creates a placeholder StatefulSet at the given size so the scaling
@@ -64,8 +63,8 @@ func scalingStatefulSet(replicas int32) {
 	Expect(k8sClient.Create(ctx, sts)).To(Succeed())
 }
 
-// newScalingConfig builds a Pending config for the new desired topology.
-func newScalingConfig(name string, seq int, primaries, replicas int32, purge *bool) *redisv1.RedkeyConfig {
+// newScalingConfig builds a Pending config (sequence 2) for the new desired topology.
+func newScalingConfig(name string, primaries, replicas int32, purge *bool) {
 	cfg := &redisv1.RedkeyConfig{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -73,7 +72,7 @@ func newScalingConfig(name string, seq int, primaries, replicas int32, purge *bo
 			Labels:    map[string]string{clusterLabel: clusterName},
 		},
 		Spec: redisv1.RedkeyConfigSpec{
-			Sequence:             seq,
+			Sequence:             2,
 			Primaries:            primaries,
 			ReplicasPerPrimary:   replicas,
 			Ephemeral:            true,
@@ -88,7 +87,6 @@ func newScalingConfig(name string, seq int, primaries, replicas int32, purge *bo
 		Nodes:       map[string]*redisv1.RedisNode{},
 	}
 	Expect(k8sClient.Status().Update(ctx, cfg)).To(Succeed())
-	return cfg
 }
 
 func deleteScalingResources() {
@@ -122,6 +120,28 @@ func statefulSetReplicas(g Gomega) int32 {
 	return *sts.Spec.Replicas
 }
 
+// startScalingReconciler runs Robin for the test cluster until the spec finishes.
+func startScalingReconciler() {
+	rec := newIntegrationReconciler(newTestRuntimeConfig())
+	loopCancel, errCh := startReconcilerLoop(rec)
+	DeferCleanup(stopReconcilerLoop, loopCancel, errCh)
+}
+
+func expectConfigStatus(name, status string) {
+	Eventually(func(g Gomega) {
+		var fetched redisv1.RedkeyConfig
+		key := types.NamespacedName{Name: name, Namespace: testNamespace}
+		g.Expect(k8sClient.Get(ctx, key, &fetched)).To(Succeed())
+		g.Expect(fetched.Status.Status).To(Equal(status))
+	}, timeout, interval).Should(Succeed())
+}
+
+func expectStatefulSetReplicas(replicas int32) {
+	Eventually(func(g Gomega) {
+		g.Expect(statefulSetReplicas(g)).To(Equal(replicas))
+	}, timeout, interval).Should(Succeed())
+}
+
 var _ = Describe("Cluster Scaling (integration)", func() {
 	AfterEach(func() {
 		cleanup()
@@ -132,40 +152,24 @@ var _ = Describe("Cluster Scaling (integration)", func() {
 		It("grows the StatefulSet to the new node count when primaries increase", func() {
 			scalingOwner(6, 0, nil)
 			scalingStatefulSet(3)
-			createAppliedConfig("scale-up-1", 1, 3, 0)
-			newScalingConfig("scale-up-2", 2, 6, 0, nil)
+			createAppliedConfig("scale-up-1", 3, 0)
+			newScalingConfig("scale-up-2", 6, 0, nil)
+			startScalingReconciler()
 
-			rec := newIntegrationReconciler(clusterName, newTestRuntimeConfig())
-			loopCancel, errCh := startReconcilerLoop(rec)
-			DeferCleanup(stopReconcilerLoop, loopCancel, errCh)
-
-			// Status transitions to ScalingUp.
-			Eventually(func(g Gomega) {
-				var fetched redisv1.RedkeyConfig
-				g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: "scale-up-2", Namespace: testNamespace}, &fetched)).To(Succeed())
-				g.Expect(fetched.Status.Status).To(Equal(redisv1.ClusterStatusScalingUp))
-			}, timeout, interval).Should(Succeed())
-
+			expectConfigStatus("scale-up-2", redisv1.ClusterStatusScalingUp)
 			// StatefulSet is scaled out to the new total node count.
-			Eventually(func(g Gomega) {
-				g.Expect(statefulSetReplicas(g)).To(Equal(int32(6)))
-			}, timeout, interval).Should(Succeed())
+			expectStatefulSetReplicas(6)
 		})
 
 		It("grows the StatefulSet when replicas-per-primary increase", func() {
 			scalingOwner(3, 1, nil)
 			scalingStatefulSet(3)
-			createAppliedConfig("scale-up-rep-1", 1, 3, 0)
-			newScalingConfig("scale-up-rep-2", 2, 3, 1, nil)
-
-			rec := newIntegrationReconciler(clusterName, newTestRuntimeConfig())
-			loopCancel, errCh := startReconcilerLoop(rec)
-			DeferCleanup(stopReconcilerLoop, loopCancel, errCh)
+			createAppliedConfig("scale-up-rep-1", 3, 0)
+			newScalingConfig("scale-up-rep-2", 3, 1, nil)
+			startScalingReconciler()
 
 			// 3 primaries + 3*1 replicas = 6 nodes.
-			Eventually(func(g Gomega) {
-				g.Expect(statefulSetReplicas(g)).To(Equal(int32(6)))
-			}, timeout, interval).Should(Succeed())
+			expectStatefulSetReplicas(6)
 		})
 	})
 
@@ -173,24 +177,14 @@ var _ = Describe("Cluster Scaling (integration)", func() {
 		It("shrinks the StatefulSet to the new node count when primaries decrease", func() {
 			scalingOwner(3, 0, nil)
 			scalingStatefulSet(6)
-			createAppliedConfig("scale-down-1", 1, 6, 0)
-			newScalingConfig("scale-down-2", 2, 3, 0, nil)
+			createAppliedConfig("scale-down-1", 6, 0)
+			newScalingConfig("scale-down-2", 3, 0, nil)
+			startScalingReconciler()
 
-			rec := newIntegrationReconciler(clusterName, newTestRuntimeConfig())
-			loopCancel, errCh := startReconcilerLoop(rec)
-			DeferCleanup(stopReconcilerLoop, loopCancel, errCh)
-
-			Eventually(func(g Gomega) {
-				var fetched redisv1.RedkeyConfig
-				g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: "scale-down-2", Namespace: testNamespace}, &fetched)).To(Succeed())
-				g.Expect(fetched.Status.Status).To(Equal(redisv1.ClusterStatusScalingDown))
-			}, timeout, interval).Should(Succeed())
-
+			expectConfigStatus("scale-down-2", redisv1.ClusterStatusScalingDown)
 			// With no live Redis pods the handler observes zero current nodes and shrinks
 			// the StatefulSet straight to the target size.
-			Eventually(func(g Gomega) {
-				g.Expect(statefulSetReplicas(g)).To(Equal(int32(3)))
-			}, timeout, interval).Should(Succeed())
+			expectStatefulSetReplicas(3)
 		})
 	})
 
@@ -199,17 +193,12 @@ var _ = Describe("Cluster Scaling (integration)", func() {
 			purge := true
 			scalingOwner(6, 0, &purge)
 			scalingStatefulSet(3)
-			createAppliedConfig("fast-scale-1", 1, 3, 0)
-			newScalingConfig("fast-scale-2", 2, 6, 0, &purge)
-
-			rec := newIntegrationReconciler(clusterName, newTestRuntimeConfig())
-			loopCancel, errCh := startReconcilerLoop(rec)
-			DeferCleanup(stopReconcilerLoop, loopCancel, errCh)
+			createAppliedConfig("fast-scale-1", 3, 0)
+			newScalingConfig("fast-scale-2", 6, 0, &purge)
+			startScalingReconciler()
 
 			// The StatefulSet is deleted and recreated at the new size.
-			Eventually(func(g Gomega) {
-				g.Expect(statefulSetReplicas(g)).To(Equal(int32(6)))
-			}, timeout, interval).Should(Succeed())
+			expectStatefulSetReplicas(6)
 		})
 
 		It("does not use fast scaling when transitioning from replicas>0 to replicas=0", func() {
@@ -220,26 +209,17 @@ var _ = Describe("Cluster Scaling (integration)", func() {
 			scalingOwner(3, 0, &purge)
 			// Previous topology: 3P + 3R = 6 pods.
 			scalingStatefulSet(6)
-			createAppliedConfig("fast-norep-1", 1, 3, 1)
+			createAppliedConfig("fast-norep-1", 3, 1)
 			// New config drops replicas to 0 (scale down from 6 to 3).
-			newScalingConfig("fast-norep-2", 2, 3, 0, &purge)
-
-			rec := newIntegrationReconciler(clusterName, newTestRuntimeConfig())
-			loopCancel, errCh := startReconcilerLoop(rec)
-			DeferCleanup(stopReconcilerLoop, loopCancel, errCh)
+			newScalingConfig("fast-norep-2", 3, 0, &purge)
+			startScalingReconciler()
 
 			// Status should indicate ScalingDown (normal path), NOT fast scaling.
-			Eventually(func(g Gomega) {
-				var fetched redisv1.RedkeyConfig
-				g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: "fast-norep-2", Namespace: testNamespace}, &fetched)).To(Succeed())
-				g.Expect(fetched.Status.Status).To(Equal(redisv1.ClusterStatusScalingDown))
-			}, timeout, interval).Should(Succeed())
+			expectConfigStatus("fast-norep-2", redisv1.ClusterStatusScalingDown)
 
 			// StatefulSet should be shrunk (not deleted+recreated). Since no live Redis
 			// pods exist, the handler immediately shrinks to target.
-			Eventually(func(g Gomega) {
-				g.Expect(statefulSetReplicas(g)).To(Equal(int32(3)))
-			}, timeout, interval).Should(Succeed())
+			expectStatefulSetReplicas(3)
 
 			// Verify it still exists (fast scaling would have deleted it).
 			var sts appsv1.StatefulSet

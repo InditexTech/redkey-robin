@@ -41,6 +41,28 @@ func totalNodes(config *redisv1.RedkeyConfig) int {
 	return int(config.Spec.Primaries + (config.Spec.Primaries * config.Spec.ReplicasPerPrimary))
 }
 
+// scaleUpTopology classifies the nodes seen during scale-up against the current cluster membership.
+type scaleUpTopology struct {
+	memberIDs map[string]struct{}
+	// existingPrimaries are cluster members that are masters WITH slots assigned.
+	existingPrimaries []*redis.Node
+	// existingReplicas are cluster members that are replicas.
+	existingReplicas []*redis.Node
+	// pendingNodes are cluster members that are empty masters (met on a previous pass but
+	// not yet configured) — these need to be assigned a role.
+	pendingNodes []*redis.Node
+	// newNodes are pods not yet in the cluster at all.
+	newNodes []*redis.Node
+}
+
+// scaleUpPlan is the role assignment computed for a scale-up pass.
+type scaleUpPlan struct {
+	futurePrimaries []*redis.Node
+	futureReplicas  []*redis.Node
+	allPrimaries    []*redis.Node
+	anchorNode      *redis.Node
+}
+
 // handleScalingUp grows the cluster: it adds the new primaries and replicas, rebalances
 // the slots onto the new (empty) primaries, and finally attaches the replicas.
 // See docs/operator-guide/scaling.md (Scale Up flow) for the detailed protocol.
@@ -54,17 +76,8 @@ func (cr *ClusterReconciler) handleScalingUp(ctx context.Context, config *redisv
 	cr.logger.Info("Starting scale-up reconciliation", "targetTotal", targetTotal, "primaries", primaryCount)
 
 	// Phase 1: grow the StatefulSet so every new primary and replica pod exists.
-	cr.updateSubstatus(ctx, config, redisv1.SubstatusWaitingForPods)
-	if err := kubernetes.ScaleStatefulSet(ctx, cr.client, cr.clusterName, cr.namespace, int32(targetTotal)); err != nil {
-		return reconcileAfterInterval, fmt.Errorf("scaling StatefulSet up: %w", err)
-	}
-	ready, err := kubernetes.AllPodsReady(ctx, cr.client, cr.clusterName, cr.namespace, int32(targetTotal))
-	if err != nil {
-		return reconcileAfterInterval, fmt.Errorf("checking pod readiness during scale up: %w", err)
-	}
-	if !ready {
-		cr.logger.Info("Waiting for new pods to be ready before scaling up", "expected", targetTotal)
-		return reconcileAfterWaitInterval, nil
+	if schedule, done, err := cr.growStatefulSetForScaleUp(ctx, config, targetTotal); done {
+		return schedule, err
 	}
 
 	password := cr.getPassword(ctx, config)
@@ -78,138 +91,21 @@ func (cr *ClusterReconciler) handleScalingUp(ctx context.Context, config *redisv
 		return reconcileAfterWaitInterval, nil
 	}
 
-	// Discover which nodes are already part of the cluster by querying an existing
-	// member's CLUSTER NODES output. nodes[0] is always an existing primary (lowest
-	// ordinal, created during the initial cluster formation).
-	clusterMembers, err := nodes[0].Client().GetClusterNodes(ctx)
+	topo, err := cr.classifyScaleUpNodes(ctx, nodes)
 	if err != nil {
-		return reconcileAfterInterval, fmt.Errorf("getting cluster nodes for topology discovery: %w", err)
-	}
-	memberIDs := make(map[string]struct{}, len(clusterMembers))
-	for _, cm := range clusterMembers {
-		if cm.ID != "" && !strings.Contains(cm.Flags, "handshake") {
-			memberIDs[cm.ID] = struct{}{}
-		}
+		return reconcileAfterInterval, err
 	}
 
-	// Classify nodes into existing cluster members and truly new pods that have not
-	// yet been introduced to the cluster. This avoids the broken ordinal-based split
-	// which would try to convert existing replicas into primaries.
-	//
-	// Classification:
-	// - existingPrimaries: cluster members that are masters WITH slots assigned
-	// - existingReplicas: cluster members that are replicas
-	// - pendingNodes: cluster members that are empty masters (met on a previous pass but
-	//   not yet configured) — these need to be assigned a role
-	// - newNodes: pods not yet in the cluster at all
-	var existingPrimaries []*redis.Node
-	var existingReplicas []*redis.Node
-	var pendingNodes []*redis.Node
-	var newNodes []*redis.Node
-	for _, node := range nodes {
-		if _, isMember := memberIDs[node.ID]; isMember {
-			if err := node.RefreshInfo(ctx); err != nil {
-				return reconcileAfterInterval, fmt.Errorf("refreshing existing node %s: %w", node.Name, err)
-			}
-			if node.IsReplica() {
-				existingReplicas = append(existingReplicas, node)
-			} else if node.Slots != "" {
-				// Master with slots — a real existing primary.
-				existingPrimaries = append(existingPrimaries, node)
-			} else {
-				// Master with no slots — met on a previous pass but not yet assigned a
-				// role (could be a new primary waiting for rebalance, or a replica-to-be
-				// that was met but not yet CLUSTER REPLICATE'd).
-				pendingNodes = append(pendingNodes, node)
-			}
-		} else {
-			newNodes = append(newNodes, node)
-		}
+	plan, schedule, ok := cr.planScaleUpRoles(ctx, config, topo, nodes)
+	if !ok {
+		return schedule, nil
 	}
-
-	// Nodes available for role assignment: pending (already met, prefer for primary role
-	// since they're already in the cluster) + new (not yet met).
-	availableNodes := append(append([]*redis.Node{}, pendingNodes...), newNodes...)
-
-	// Determine how many new primaries we need.
-	newPrimariesNeeded := primaryCount - len(existingPrimaries)
-	if newPrimariesNeeded < 0 {
-		newPrimariesNeeded = 0
-	}
-	if newPrimariesNeeded > len(availableNodes) {
-		// A chaos event (e.g. a pod deleted mid-scale) can leave the cluster carrying
-		// surplus replicas — nodes attached as replicas beyond what the target topology
-		// requires — instead of the empty primaries scale-up expects. Those replicas are
-		// cluster members with a master, so they are excluded from availableNodes and the
-		// primary requirement can never be met from pending/new pods alone: scale-up would
-		// dead-end here retrying forever (observed as a 2->3 scale stuck with
-		// newPrimariesNeeded=2, availableNodes=1 and one stray replica). Promote the surplus
-		// replicas to empty primaries via the shared replica-topology remediation (CLUSTER
-		// RESET SOFT + re-MEET), then re-enter and reclassify on the healed topology so the
-		// promoted nodes count as available primaries.
-		desiredReplicaTotal := primaryCount * int(config.Spec.ReplicasPerPrimary)
-		if surplusReplicas := len(existingReplicas) - desiredReplicaTotal; surplusReplicas > 0 {
-			cr.logger.Info("Not enough available nodes but surplus replicas can be promoted, remediating replica topology",
-				"newPrimariesNeeded", newPrimariesNeeded, "availableNodes", len(availableNodes),
-				"surplusReplicas", surplusReplicas)
-			if _, err := cr.ensureReplicaTopology(ctx, config); err != nil {
-				cr.logger.Warn("Failed to promote surplus replicas during scale up, will retry", "error", err)
-				return reconcileAfterWaitInterval, nil
-			}
-			return reconcileImmediately, nil
-		}
-		cr.logger.Info("Not enough available nodes to satisfy primary requirement, will retry",
-			"newPrimariesNeeded", newPrimariesNeeded, "availableNodes", len(availableNodes))
-		return reconcileAfterWaitInterval, nil
-	}
-	futurePrimaries := availableNodes[:newPrimariesNeeded]
-	futureReplicas := availableNodes[newPrimariesNeeded:]
-
-	// All primaries = existing + future primaries to add.
-	allPrimaries := append(existingPrimaries, futurePrimaries...)
-
-	// anchorNode is the cluster member used to issue cluster-wide commands (cluster
-	// fix, rebalance, slot-stability checks). It is normally an existing primary, but
-	// after a chaos event that wipes every primary's slots (e.g. ephemeral pods that
-	// restart and rejoin empty), existingPrimaries can be empty. In that case fall back
-	// to the first available primary so scale-up can still drive recovery instead of
-	// panicking on existingPrimaries[0].
-	var anchorNode *redis.Node
-	if len(existingPrimaries) > 0 {
-		anchorNode = existingPrimaries[0]
-	} else if len(allPrimaries) > 0 {
-		anchorNode = allPrimaries[0]
-	} else {
-		anchorNode = nodes[0]
-	}
-
-	cr.logger.Info("Scale-up topology discovery",
-		"existingPrimaries", len(existingPrimaries),
-		"existingReplicas", len(existingReplicas),
-		"pendingNodes", len(pendingNodes),
-		"futurePrimaries", len(futurePrimaries),
-		"futureReplicas", len(futureReplicas))
 
 	// Introduce only the future primary nodes that are not yet in the cluster.
 	// Pending nodes (empty masters from a previous pass) are already met.
 	cr.updateSubstatus(ctx, config, redisv1.SubstatusInitializingNodes)
-	unmeetPrimaries := filterUnmet(futurePrimaries, memberIDs)
-	if len(unmeetPrimaries) > 0 {
-		// Meet unmet primaries with all existing cluster members so gossip propagates.
-		meetGroup := append(append([]*redis.Node{}, existingPrimaries...), unmeetPrimaries...)
-		if err := cr.meetNodes(ctx, meetGroup); err != nil {
-			cr.logger.Error("Failed to meet new primary nodes during scale up", "error", err)
-			return reconcileAfterWaitInterval, nil
-		}
-		converged, err := cr.checkGossipConvergence(ctx, meetGroup)
-		if err != nil {
-			cr.logger.Warn("Failed to check gossip convergence during scale up", "error", err)
-			return reconcileAfterWaitInterval, nil
-		}
-		if !converged {
-			cr.logger.Info("Gossip not yet converged during scale up, will retry")
-			return reconcileAfterWaitInterval, nil
-		}
+	if !cr.meetScaleUpPrimaries(ctx, topo, plan) {
+		return reconcileAfterWaitInterval, nil
 	}
 
 	// Heal the topology before doing any slot work: forget the lingering entries of pods
@@ -227,82 +123,19 @@ func (cr *ClusterReconciler) handleScalingUp(ctx context.Context, config *redisv
 		return reconcileImmediately, nil
 	}
 
-	// Phase 2: rebalance slots onto the new empty primaries (TRYAGAIN-protected).
-	// Only run if there are futurePrimaries that need slots. On re-entry (e.g. after
-	// Phase 3 gossip convergence failed), all primaries already have slots and no
-	// rebalance is needed — running it would distribute slots to pending replica nodes
-	// that are visible as empty masters but should become replicas.
-	if len(futurePrimaries) > 0 {
-		cr.updateSubstatus(ctx, config, redisv1.SubstatusRebalancing)
-		cr.logger.Info("Starting rebalance to distribute slots to new primaries", "newPrimaries", len(futurePrimaries))
-		if err := cr.rebalanceWithRetry(ctx, config, anchorNode, nil, false); err != nil {
-			cr.logger.Error("Rebalance failed during scale up", "error", err)
-			return reconcileAfterWaitInterval, nil
-		}
-
-		// Wait until no slots remain in a migrating/importing state.
-		stable, err := cr.slotsStable(ctx, anchorNode)
-		if err != nil {
-			cr.logger.Warn("Failed to check slot stability during scale up", "error", err)
-			return reconcileAfterWaitInterval, nil
-		}
-		if !stable {
-			cr.logger.Info("Slots still migrating during scale up, will retry")
-			return reconcileAfterWaitInterval, nil
-		}
-	} else {
-		// No new primaries need slots, but a primary killed mid-operation (chaos) can leave slots
-		// orphaned on the existing topology — the surviving masters then cover only part of the
-		// keyspace. rebalanceWithRetry, which repairs open/uncovered slots, only runs when there are
-		// future primaries, so repair here directly. Without this, verifyCluster fails on the missing
-		// coverage every pass and the scale-up loops forever (WaitingForPods -> InitializingNodes ->
-		// Verifying, never reaching Ready). nil weights: this is not a drain, so slots may be recovered
-		// onto any master.
-		if err := cr.recoverOpenSlots(ctx, anchorNode, password); err != nil {
-			cr.logger.Warn("Failed to repair orphaned slots during scale up, will retry", "error", err)
-			return reconcileAfterWaitInterval, nil
-		}
+	// Phase 2: rebalance slots onto the new empty primaries.
+	if !cr.rebalanceScaleUp(ctx, config, plan, password) {
+		return reconcileAfterWaitInterval, nil
 	}
 
-	// Phase 3: introduce future replica nodes and attach ALL replicas (existing + future)
-	// to their correct primaries. Adding replicas after rebalance avoids replicating empty
-	// or in-flux nodes, and prevents the rebalance from assigning slots to replicas.
-	allReplicas := append(existingReplicas, futureReplicas...)
-	if config.Spec.ReplicasPerPrimary > 0 && len(allReplicas) > 0 {
-		cr.updateSubstatus(ctx, config, redisv1.SubstatusAttachingReplicas)
-		unmeetReplicas := filterUnmet(futureReplicas, memberIDs)
-		if len(unmeetReplicas) > 0 {
-			// Meet unmet replicas with the existing cluster so they join with empty state.
-			meetGroup := append(append([]*redis.Node{}, allPrimaries...), unmeetReplicas...)
-			if err := cr.meetNodes(ctx, meetGroup); err != nil {
-				cr.logger.Warn("Failed to meet new replica nodes during scale up", "error", err)
-				return reconcileAfterWaitInterval, nil
-			}
-			allActive := append(append([]*redis.Node{}, allPrimaries...), allReplicas...)
-			converged, err := cr.checkGossipConvergence(ctx, allActive)
-			if err != nil {
-				cr.logger.Warn("Failed to check gossip convergence for replicas", "error", err)
-				return reconcileAfterWaitInterval, nil
-			}
-			if !converged {
-				cr.logger.Info("Gossip not yet converged for replica nodes, will retry")
-				return reconcileAfterWaitInterval, nil
-			}
-		}
-
-		if err := cr.refreshRoles(ctx, nodes); err != nil {
-			cr.logger.Warn("Failed to refresh roles before attaching replicas", "error", err)
-			return reconcileAfterWaitInterval, nil
-		}
-		if err := cr.setReplicas(ctx, allPrimaries, allReplicas, config.Spec.ReplicasPerPrimary); err != nil {
-			cr.logger.Warn("Failed to attach replicas during scale up, will retry", "error", err)
-			return reconcileAfterWaitInterval, nil
-		}
+	// Phase 3: attach the replicas.
+	if !cr.attachScaleUpReplicas(ctx, config, nodes, topo, plan) {
+		return reconcileAfterWaitInterval, nil
 	}
 
 	// Phase 4: validate.
 	cr.updateSubstatus(ctx, config, redisv1.SubstatusVerifying)
-	ok, err := cr.verifyCluster(ctx, nodes[0])
+	ok, err = cr.verifyCluster(ctx, nodes[0])
 	if err != nil {
 		cr.logger.Error("Failed to verify cluster after scale up", "error", err)
 		return reconcileAfterWaitInterval, nil
@@ -313,6 +146,299 @@ func (cr *ClusterReconciler) handleScalingUp(ctx context.Context, config *redisv
 	}
 
 	return cr.finishScaling(ctx, config, nodes, "scale up")
+}
+
+// growStatefulSetForScaleUp scales the StatefulSet to the target size and waits for every
+// pod to be ready. When done is true the caller must return schedule and err as is.
+func (cr *ClusterReconciler) growStatefulSetForScaleUp(
+	ctx context.Context, config *redisv1.RedkeyConfig, targetTotal int,
+) (schedule reconcileSchedule, done bool, err error) {
+	cr.updateSubstatus(ctx, config, redisv1.SubstatusWaitingForPods)
+	if err := kubernetes.ScaleStatefulSet(ctx, cr.client, cr.clusterName, cr.namespace, int32(targetTotal)); err != nil {
+		return reconcileAfterInterval, true, fmt.Errorf("scaling StatefulSet up: %w", err)
+	}
+	ready, err := kubernetes.AllPodsReady(ctx, cr.client, cr.clusterName, cr.namespace, int32(targetTotal))
+	if err != nil {
+		return reconcileAfterInterval, true, fmt.Errorf("checking pod readiness during scale up: %w", err)
+	}
+	if !ready {
+		cr.logger.Info("Waiting for new pods to be ready before scaling up", "expected", targetTotal)
+		return reconcileAfterWaitInterval, true, nil
+	}
+	return 0, false, nil
+}
+
+// classifyScaleUpNodes splits the nodes into existing cluster members and truly new pods
+// that have not yet been introduced to the cluster. This avoids the broken ordinal-based
+// split which would try to convert existing replicas into primaries.
+func (cr *ClusterReconciler) classifyScaleUpNodes(ctx context.Context, nodes []*redis.Node) (scaleUpTopology, error) {
+	// Discover which nodes are already part of the cluster by querying an existing
+	// member's CLUSTER NODES output. nodes[0] is always an existing primary (lowest
+	// ordinal, created during the initial cluster formation).
+	clusterMembers, err := nodes[0].Client().GetClusterNodes(ctx)
+	if err != nil {
+		return scaleUpTopology{}, fmt.Errorf("getting cluster nodes for topology discovery: %w", err)
+	}
+	topo := scaleUpTopology{memberIDs: make(map[string]struct{}, len(clusterMembers))}
+	for _, cm := range clusterMembers {
+		if cm.ID != "" && !strings.Contains(cm.Flags, "handshake") {
+			topo.memberIDs[cm.ID] = struct{}{}
+		}
+	}
+
+	for _, node := range nodes {
+		if _, isMember := topo.memberIDs[node.ID]; !isMember {
+			topo.newNodes = append(topo.newNodes, node)
+			continue
+		}
+		if err := node.RefreshInfo(ctx); err != nil {
+			return scaleUpTopology{}, fmt.Errorf("refreshing existing node %s: %w", node.Name, err)
+		}
+		switch {
+		case node.IsReplica():
+			topo.existingReplicas = append(topo.existingReplicas, node)
+		case node.Slots != "":
+			// Master with slots — a real existing primary.
+			topo.existingPrimaries = append(topo.existingPrimaries, node)
+		default:
+			// Master with no slots — met on a previous pass but not yet assigned a
+			// role (could be a new primary waiting for rebalance, or a replica-to-be
+			// that was met but not yet CLUSTER REPLICATE'd).
+			topo.pendingNodes = append(topo.pendingNodes, node)
+		}
+	}
+	return topo, nil
+}
+
+// planScaleUpRoles decides which available nodes become primaries and which become
+// replicas. When ok is false the caller must return schedule.
+func (cr *ClusterReconciler) planScaleUpRoles(
+	ctx context.Context, config *redisv1.RedkeyConfig, topo scaleUpTopology, nodes []*redis.Node,
+) (plan scaleUpPlan, schedule reconcileSchedule, ok bool) {
+	primaryCount := int(config.Spec.Primaries)
+
+	// Nodes available for role assignment: pending (already met, prefer for primary role
+	// since they're already in the cluster) + new (not yet met).
+	availableNodes := append(append([]*redis.Node{}, topo.pendingNodes...), topo.newNodes...)
+
+	// Determine how many new primaries we need.
+	newPrimariesNeeded := max(primaryCount-len(topo.existingPrimaries), 0)
+	if newPrimariesNeeded > len(availableNodes) {
+		return scaleUpPlan{}, cr.handleScaleUpPrimaryShortage(ctx, config, topo, newPrimariesNeeded, len(availableNodes)), false
+	}
+	plan.futurePrimaries = availableNodes[:newPrimariesNeeded]
+	plan.futureReplicas = availableNodes[newPrimariesNeeded:]
+
+	// All primaries = existing + future primaries to add.
+	plan.allPrimaries = append(topo.existingPrimaries, plan.futurePrimaries...)
+
+	// anchorNode is the cluster member used to issue cluster-wide commands (cluster
+	// fix, rebalance, slot-stability checks). It is normally an existing primary, but
+	// after a chaos event that wipes every primary's slots (e.g. ephemeral pods that
+	// restart and rejoin empty), existingPrimaries can be empty. In that case fall back
+	// to the first available primary so scale-up can still drive recovery instead of
+	// panicking on existingPrimaries[0].
+	switch {
+	case len(topo.existingPrimaries) > 0:
+		plan.anchorNode = topo.existingPrimaries[0]
+	case len(plan.allPrimaries) > 0:
+		plan.anchorNode = plan.allPrimaries[0]
+	default:
+		plan.anchorNode = nodes[0]
+	}
+
+	cr.logger.Info("Scale-up topology discovery",
+		"existingPrimaries", len(topo.existingPrimaries),
+		"existingReplicas", len(topo.existingReplicas),
+		"pendingNodes", len(topo.pendingNodes),
+		"futurePrimaries", len(plan.futurePrimaries),
+		"futureReplicas", len(plan.futureReplicas))
+	return plan, 0, true
+}
+
+// handleScaleUpPrimaryShortage is called when there are not enough pending/new nodes to
+// fill the primary role and returns how the scale-up should be requeued.
+func (cr *ClusterReconciler) handleScaleUpPrimaryShortage(
+	ctx context.Context, config *redisv1.RedkeyConfig, topo scaleUpTopology, newPrimariesNeeded, availableNodes int,
+) reconcileSchedule {
+	// A chaos event (e.g. a pod deleted mid-scale) can leave the cluster carrying
+	// surplus replicas — nodes attached as replicas beyond what the target topology
+	// requires — instead of the empty primaries scale-up expects. Those replicas are
+	// cluster members with a master, so they are excluded from availableNodes and the
+	// primary requirement can never be met from pending/new pods alone: scale-up would
+	// dead-end here retrying forever (observed as a 2->3 scale stuck with
+	// newPrimariesNeeded=2, availableNodes=1 and one stray replica). Promote the surplus
+	// replicas to empty primaries via the shared replica-topology remediation (CLUSTER
+	// RESET SOFT + re-MEET), then re-enter and reclassify on the healed topology so the
+	// promoted nodes count as available primaries.
+	desiredReplicaTotal := int(config.Spec.Primaries) * int(config.Spec.ReplicasPerPrimary)
+	if surplusReplicas := len(topo.existingReplicas) - desiredReplicaTotal; surplusReplicas > 0 {
+		cr.logger.Info("Not enough available nodes but surplus replicas can be promoted, remediating replica topology",
+			"newPrimariesNeeded", newPrimariesNeeded, "availableNodes", availableNodes,
+			"surplusReplicas", surplusReplicas)
+		if _, err := cr.ensureReplicaTopology(ctx, config); err != nil {
+			cr.logger.Warn("Failed to promote surplus replicas during scale up, will retry", "error", err)
+			return reconcileAfterWaitInterval
+		}
+		return reconcileImmediately
+	}
+	cr.logger.Info("Not enough available nodes to satisfy primary requirement, will retry",
+		"newPrimariesNeeded", newPrimariesNeeded, "availableNodes", availableNodes)
+	return reconcileAfterWaitInterval
+}
+
+// meetScaleUpPrimaries meets the future primaries that are not yet cluster members and
+// waits for gossip convergence. It returns false when the scale-up must be retried.
+func (cr *ClusterReconciler) meetScaleUpPrimaries(ctx context.Context, topo scaleUpTopology, plan scaleUpPlan) bool {
+	unmeetPrimaries := filterUnmet(plan.futurePrimaries, topo.memberIDs)
+	if len(unmeetPrimaries) == 0 {
+		return true
+	}
+	// Meet unmet primaries with all existing cluster members so gossip propagates.
+	meetGroup := append(append([]*redis.Node{}, topo.existingPrimaries...), unmeetPrimaries...)
+	if err := cr.meetNodes(ctx, meetGroup); err != nil {
+		cr.logger.Error("Failed to meet new primary nodes during scale up", "error", err)
+		return false
+	}
+	converged, err := cr.checkGossipConvergence(ctx, meetGroup)
+	if err != nil {
+		cr.logger.Warn("Failed to check gossip convergence during scale up", "error", err)
+		return false
+	}
+	if !converged {
+		cr.logger.Info("Gossip not yet converged during scale up, will retry")
+		return false
+	}
+	return true
+}
+
+// rebalanceScaleUp moves slots onto the new empty primaries (TRYAGAIN-protected) or, when
+// there are none, repairs orphaned slots. It returns false when the scale-up must be retried.
+func (cr *ClusterReconciler) rebalanceScaleUp(
+	ctx context.Context, config *redisv1.RedkeyConfig, plan scaleUpPlan, password string,
+) bool {
+	// Only run if there are futurePrimaries that need slots. On re-entry (e.g. after
+	// Phase 3 gossip convergence failed), all primaries already have slots and no
+	// rebalance is needed — running it would distribute slots to pending replica nodes
+	// that are visible as empty masters but should become replicas.
+	if len(plan.futurePrimaries) == 0 {
+		// No new primaries need slots, but a primary killed mid-operation (chaos) can leave slots
+		// orphaned on the existing topology — the surviving masters then cover only part of the
+		// keyspace. rebalanceWithRetry, which repairs open/uncovered slots, only runs when there are
+		// future primaries, so repair here directly. Without this, verifyCluster fails on the missing
+		// coverage every pass and the scale-up loops forever (WaitingForPods -> InitializingNodes ->
+		// Verifying, never reaching Ready). nil weights: this is not a drain, so slots may be recovered
+		// onto any master.
+		if err := cr.recoverOpenSlots(ctx, plan.anchorNode, password); err != nil {
+			cr.logger.Warn("Failed to repair orphaned slots during scale up, will retry", "error", err)
+			return false
+		}
+		return true
+	}
+
+	cr.updateSubstatus(ctx, config, redisv1.SubstatusRebalancing)
+	cr.logger.Info("Starting rebalance to distribute slots to new primaries", "newPrimaries", len(plan.futurePrimaries))
+	if err := cr.rebalanceWithRetry(ctx, config, plan.anchorNode, nil, false); err != nil {
+		cr.logger.Error("Rebalance failed during scale up", "error", err)
+		return false
+	}
+
+	// Wait until no slots remain in a migrating/importing state.
+	stable, err := cr.slotsStable(ctx, plan.anchorNode)
+	if err != nil {
+		cr.logger.Warn("Failed to check slot stability during scale up", "error", err)
+		return false
+	}
+	if !stable {
+		cr.logger.Info("Slots still migrating during scale up, will retry")
+		return false
+	}
+	return true
+}
+
+// attachScaleUpReplicas introduces future replica nodes and attaches ALL replicas (existing +
+// future) to their correct primaries. Adding replicas after rebalance avoids replicating empty
+// or in-flux nodes, and prevents the rebalance from assigning slots to replicas. It returns
+// false when the scale-up must be retried.
+func (cr *ClusterReconciler) attachScaleUpReplicas(
+	ctx context.Context, config *redisv1.RedkeyConfig, nodes []*redis.Node, topo scaleUpTopology, plan scaleUpPlan,
+) bool {
+	allReplicas := append(topo.existingReplicas, plan.futureReplicas...)
+	if config.Spec.ReplicasPerPrimary == 0 || len(allReplicas) == 0 {
+		return true
+	}
+
+	cr.updateSubstatus(ctx, config, redisv1.SubstatusAttachingReplicas)
+	unmeetReplicas := filterUnmet(plan.futureReplicas, topo.memberIDs)
+	if len(unmeetReplicas) > 0 {
+		// Meet unmet replicas with the existing cluster so they join with empty state.
+		meetGroup := append(append([]*redis.Node{}, plan.allPrimaries...), unmeetReplicas...)
+		if err := cr.meetNodes(ctx, meetGroup); err != nil {
+			cr.logger.Warn("Failed to meet new replica nodes during scale up", "error", err)
+			return false
+		}
+		allActive := append(append([]*redis.Node{}, plan.allPrimaries...), allReplicas...)
+		converged, err := cr.checkGossipConvergence(ctx, allActive)
+		if err != nil {
+			cr.logger.Warn("Failed to check gossip convergence for replicas", "error", err)
+			return false
+		}
+		if !converged {
+			cr.logger.Info("Gossip not yet converged for replica nodes, will retry")
+			return false
+		}
+	}
+
+	if err := cr.refreshRoles(ctx, nodes); err != nil {
+		cr.logger.Warn("Failed to refresh roles before attaching replicas", "error", err)
+		return false
+	}
+	if err := cr.setReplicas(ctx, plan.allPrimaries, allReplicas, config.Spec.ReplicasPerPrimary); err != nil {
+		cr.logger.Warn("Failed to attach replicas during scale up, will retry", "error", err)
+		return false
+	}
+	return true
+}
+
+// scaleDownPlan splits the current nodes into the ones kept and the ones removed.
+type scaleDownPlan struct {
+	currentPrimaries []*redis.Node
+	currentReplicas  []*redis.Node
+	keepPrimaries    []*redis.Node
+	drainPrimaries   []*redis.Node
+	keepReplicas     []*redis.Node
+	removeReplicas   []*redis.Node
+}
+
+// planScaleDown classifies nodes by current role — scale-down decisions must be
+// topology-aware, not ordinal-based, to handle clusters where failovers have shuffled roles.
+func planScaleDown(nodes []*redis.Node, targetPrimaries, targetReplicaCount int) scaleDownPlan {
+	var p scaleDownPlan
+	for _, n := range nodes {
+		if n.IsPrimary() {
+			p.currentPrimaries = append(p.currentPrimaries, n)
+		} else {
+			p.currentReplicas = append(p.currentReplicas, n)
+		}
+	}
+
+	// Determine which primaries to keep and which to drain.
+	// Keep the first targetPrimaries primaries (by ordinal, since they were sorted).
+	if len(p.currentPrimaries) > targetPrimaries {
+		p.keepPrimaries = p.currentPrimaries[:targetPrimaries]
+		p.drainPrimaries = p.currentPrimaries[targetPrimaries:]
+	} else {
+		p.keepPrimaries = p.currentPrimaries
+	}
+
+	// Determine which replicas to keep: targetReplicas = targetPrimaries * replicasPerPrimary.
+	if len(p.currentReplicas) > targetReplicaCount {
+		p.keepReplicas = p.currentReplicas[:targetReplicaCount]
+		p.removeReplicas = p.currentReplicas[targetReplicaCount:]
+	} else {
+		p.keepReplicas = p.currentReplicas
+	}
+	return p
 }
 
 // handleScalingDown shrinks the cluster: it drains the highest-ordinal primaries, removes
@@ -366,111 +492,27 @@ func (cr *ClusterReconciler) handleScalingDown(ctx context.Context, config *redi
 		return reconcileImmediately, nil
 	}
 
-	currentTotal := len(nodes)
-	if currentTotal <= targetTotal {
-		// Nodes already removed; make sure the StatefulSet matches and verify.
-		cr.updateSubstatus(ctx, config, redisv1.SubstatusVerifying)
-		if err := kubernetes.ScaleStatefulSet(ctx, cr.client, cr.clusterName, cr.namespace, int32(targetTotal)); err != nil {
-			return reconcileAfterInterval, fmt.Errorf("scaling StatefulSet down: %w", err)
-		}
-		if len(nodes) == 0 {
-			return reconcileAfterWaitInterval, nil
-		}
-		ok, err := cr.verifyCluster(ctx, nodes[0])
-		if err != nil || !ok {
-			cr.logger.Info("Cluster not yet healthy after scale down, will retry")
-			return reconcileAfterWaitInterval, nil
-		}
-		return cr.finishScaling(ctx, config, nodes[:targetTotal], "scale down")
+	if len(nodes) <= targetTotal {
+		return cr.completeShrunkScaleDown(ctx, config, nodes, targetTotal)
 	}
 
-	// Classify nodes by current role — scale-down decisions must be topology-aware, not
-	// ordinal-based, to handle clusters where failovers have shuffled roles.
-	var currentPrimaries []*redis.Node
-	var currentReplicas []*redis.Node
-	for _, n := range nodes {
-		if n.IsPrimary() {
-			currentPrimaries = append(currentPrimaries, n)
-		} else {
-			currentReplicas = append(currentReplicas, n)
-		}
-	}
-
-	// Determine which primaries to keep and which to drain.
-	// Keep the first targetPrimaries primaries (by ordinal, since they were sorted).
-	var keepPrimaries, drainPrimaries []*redis.Node
-	if len(currentPrimaries) > targetPrimaries {
-		keepPrimaries = currentPrimaries[:targetPrimaries]
-		drainPrimaries = currentPrimaries[targetPrimaries:]
-	} else {
-		keepPrimaries = currentPrimaries
-	}
-
-	// Determine which replicas to keep: targetReplicas = targetPrimaries * replicasPerPrimary.
-	targetReplicaCount := targetPrimaries * int(config.Spec.ReplicasPerPrimary)
-	var keepReplicas, removeReplicas []*redis.Node
-	if len(currentReplicas) > targetReplicaCount {
-		keepReplicas = currentReplicas[:targetReplicaCount]
-		removeReplicas = currentReplicas[targetReplicaCount:]
-	} else {
-		keepReplicas = currentReplicas
-	}
+	plan := planScaleDown(nodes, targetPrimaries, targetPrimaries*int(config.Spec.ReplicasPerPrimary))
 
 	// Build the keep and remove sets.
-	keep := append(append([]*redis.Node{}, keepPrimaries...), keepReplicas...)
-	remove := append(append([]*redis.Node{}, removeReplicas...), drainPrimaries...)
+	keep := append(append([]*redis.Node{}, plan.keepPrimaries...), plan.keepReplicas...)
+	remove := append(append([]*redis.Node{}, plan.removeReplicas...), plan.drainPrimaries...)
 
 	cr.logger.Info("Scale-down topology classification",
-		"currentPrimaries", len(currentPrimaries),
-		"currentReplicas", len(currentReplicas),
-		"keepPrimaries", len(keepPrimaries),
-		"keepReplicas", len(keepReplicas),
-		"drainPrimaries", len(drainPrimaries),
-		"removeReplicas", len(removeReplicas))
+		"currentPrimaries", len(plan.currentPrimaries),
+		"currentReplicas", len(plan.currentReplicas),
+		"keepPrimaries", len(plan.keepPrimaries),
+		"keepReplicas", len(plan.keepReplicas),
+		"drainPrimaries", len(plan.drainPrimaries),
+		"removeReplicas", len(plan.removeReplicas))
 
-	// Phase 1: drain the primaries that are being removed (weight 0), keeping
-	// the surviving primaries (weight 1). Slots flow from the drained nodes to the keepers.
-	if len(drainPrimaries) > 0 {
-		cr.updateSubstatus(ctx, config, redisv1.SubstatusDrainingPrimaries)
-		cr.logger.Info("Draining primaries before removal", "drainCount", len(drainPrimaries))
-		weights := make(map[string]int)
-		drainHasSlots := false
-		for _, n := range keepPrimaries {
-			weights[n.ID] = 1
-		}
-		for _, n := range drainPrimaries {
-			weights[n.ID] = 0
-			if strings.TrimSpace(n.Slots) != "" {
-				drainHasSlots = true
-			}
-		}
-
-		if drainHasSlots {
-			if err := cr.rebalanceWithRetry(ctx, config, keepPrimaries[0], weights, true); err != nil {
-				cr.logger.Error("Rebalance failed during scale down", "error", err)
-				return reconcileAfterWaitInterval, nil
-			}
-			stable, err := cr.slotsStable(ctx, keepPrimaries[0])
-			if err != nil {
-				cr.logger.Warn("Failed to check slot stability during scale down", "error", err)
-				return reconcileAfterWaitInterval, nil
-			}
-			if !stable {
-				cr.logger.Info("Slots still migrating during scale down, will retry")
-				return reconcileAfterWaitInterval, nil
-			}
-			// Validate the drained primaries no longer hold slots.
-			if err := cr.refreshRoles(ctx, drainPrimaries); err != nil {
-				cr.logger.Warn("Failed to refresh roles after drain", "error", err)
-				return reconcileAfterWaitInterval, nil
-			}
-			for _, n := range drainPrimaries {
-				if strings.TrimSpace(n.Slots) != "" {
-					cr.logger.Info("Drained primary still holds slots, will retry", "node", n.Name)
-					return reconcileAfterWaitInterval, nil
-				}
-			}
-		}
+	// Phase 1: drain the primaries that are being removed.
+	if !cr.drainScaleDownPrimaries(ctx, config, plan) {
+		return reconcileAfterWaitInterval, nil
 	}
 
 	// Phase 2: remove the surplus nodes — replicas first to avoid spurious failovers,
@@ -490,13 +532,13 @@ func (cr *ClusterReconciler) handleScalingDown(ctx context.Context, config *redi
 	}
 
 	// Re-attach replicas if needed (former primaries demoted to replicas).
-	if config.Spec.ReplicasPerPrimary > 0 && len(keepReplicas) > 0 {
+	if config.Spec.ReplicasPerPrimary > 0 && len(plan.keepReplicas) > 0 {
 		cr.updateSubstatus(ctx, config, redisv1.SubstatusAttachingReplicas)
 		if err := cr.refreshRoles(ctx, keep); err != nil {
 			cr.logger.Warn("Failed to refresh roles before re-attaching replicas", "error", err)
 			return reconcileAfterWaitInterval, nil
 		}
-		if err := cr.setReplicas(ctx, keepPrimaries, keepReplicas, config.Spec.ReplicasPerPrimary); err != nil {
+		if err := cr.setReplicas(ctx, plan.keepPrimaries, plan.keepReplicas, config.Spec.ReplicasPerPrimary); err != nil {
 			cr.logger.Warn("Failed to re-attach replicas during scale down, will retry", "error", err)
 			return reconcileAfterWaitInterval, nil
 		}
@@ -513,6 +555,79 @@ func (cr *ClusterReconciler) handleScalingDown(ctx context.Context, config *redi
 	}
 
 	return cr.finishScaling(ctx, config, keep, "scale down")
+}
+
+// completeShrunkScaleDown handles a scale-down whose surplus nodes are already gone: it makes
+// sure the StatefulSet matches the target size and verifies the cluster.
+func (cr *ClusterReconciler) completeShrunkScaleDown(
+	ctx context.Context, config *redisv1.RedkeyConfig, nodes []*redis.Node, targetTotal int,
+) (reconcileSchedule, error) {
+	cr.updateSubstatus(ctx, config, redisv1.SubstatusVerifying)
+	if err := kubernetes.ScaleStatefulSet(ctx, cr.client, cr.clusterName, cr.namespace, int32(targetTotal)); err != nil {
+		return reconcileAfterInterval, fmt.Errorf("scaling StatefulSet down: %w", err)
+	}
+	if len(nodes) == 0 {
+		return reconcileAfterWaitInterval, nil
+	}
+	ok, err := cr.verifyCluster(ctx, nodes[0])
+	if err != nil || !ok {
+		cr.logger.Info("Cluster not yet healthy after scale down, will retry")
+		return reconcileAfterWaitInterval, nil
+	}
+	return cr.finishScaling(ctx, config, nodes[:targetTotal], "scale down")
+}
+
+// drainScaleDownPrimaries moves every slot off the primaries being removed (weight 0) onto
+// the surviving primaries (weight 1). It returns false when the scale-down must be retried.
+func (cr *ClusterReconciler) drainScaleDownPrimaries(
+	ctx context.Context, config *redisv1.RedkeyConfig, plan scaleDownPlan,
+) bool {
+	if len(plan.drainPrimaries) == 0 {
+		return true
+	}
+
+	cr.updateSubstatus(ctx, config, redisv1.SubstatusDrainingPrimaries)
+	cr.logger.Info("Draining primaries before removal", "drainCount", len(plan.drainPrimaries))
+	weights := make(map[string]int)
+	drainHasSlots := false
+	for _, n := range plan.keepPrimaries {
+		weights[n.ID] = 1
+	}
+	for _, n := range plan.drainPrimaries {
+		weights[n.ID] = 0
+		if strings.TrimSpace(n.Slots) != "" {
+			drainHasSlots = true
+		}
+	}
+	if !drainHasSlots {
+		return true
+	}
+
+	if err := cr.rebalanceWithRetry(ctx, config, plan.keepPrimaries[0], weights, true); err != nil {
+		cr.logger.Error("Rebalance failed during scale down", "error", err)
+		return false
+	}
+	stable, err := cr.slotsStable(ctx, plan.keepPrimaries[0])
+	if err != nil {
+		cr.logger.Warn("Failed to check slot stability during scale down", "error", err)
+		return false
+	}
+	if !stable {
+		cr.logger.Info("Slots still migrating during scale down, will retry")
+		return false
+	}
+	// Validate the drained primaries no longer hold slots.
+	if err := cr.refreshRoles(ctx, plan.drainPrimaries); err != nil {
+		cr.logger.Warn("Failed to refresh roles after drain", "error", err)
+		return false
+	}
+	for _, n := range plan.drainPrimaries {
+		if strings.TrimSpace(n.Slots) != "" {
+			cr.logger.Info("Drained primary still holds slots, will retry", "node", n.Name)
+			return false
+		}
+	}
+	return true
 }
 
 // handleFastScaling recreates the cluster from scratch at the new topology. It is only
