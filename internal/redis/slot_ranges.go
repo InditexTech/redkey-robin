@@ -40,6 +40,7 @@ func ParseSlotRanges(raw string) ([]SlotRange, error) {
 }
 
 func parseSlotToken(token string) (SlotRange, error) {
+	const maxSlot = TotalClusterSlots - 1
 	if token == "" {
 		return SlotRange{}, fmt.Errorf("empty slot token")
 	}
@@ -60,7 +61,7 @@ func parseSlotToken(token string) (SlotRange, error) {
 		if err != nil {
 			return SlotRange{}, fmt.Errorf("invalid slot range %q: %w", token, err)
 		}
-		if start < 0 || end < start {
+		if start < 0 || end < start || end > maxSlot {
 			return SlotRange{}, fmt.Errorf("invalid slot range %q", token)
 		}
 		return SlotRange{Start: start, End: end}, nil
@@ -70,7 +71,7 @@ func parseSlotToken(token string) (SlotRange, error) {
 	if err != nil {
 		return SlotRange{}, fmt.Errorf("invalid slot token %q: %w", token, err)
 	}
-	if slot < 0 {
+	if slot < 0 || slot > maxSlot {
 		return SlotRange{}, fmt.Errorf("invalid slot token %q", token)
 	}
 	return SlotRange{Start: slot, End: slot}, nil

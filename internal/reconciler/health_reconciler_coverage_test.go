@@ -292,6 +292,16 @@ func TestIsForgettableNoaddrGhost(t *testing.T) {
 			want: false,
 		},
 		{
+			name: "noaddr node with only migration markers is a forgettable phantom",
+			node: redis.ClusterNode{ID: "ghost", IP: "", Addr: ":0@0", Flags: "master,noaddr", Slots: "[123->-abc]"},
+			want: true,
+		},
+		{
+			name: "noaddr node with an unparseable slot entry is conservatively protected",
+			node: redis.ClusterNode{ID: "ghost", IP: "", Addr: ":0@0", Flags: "master,noaddr", Slots: "100-5"},
+			want: false,
+		},
+		{
 			name: "empty IP without the noaddr flag is not forgotten (e.g. handshake)",
 			node: redis.ClusterNode{ID: "joining", IP: "", Addr: ":0@0", Flags: "handshake"},
 			want: false,
