@@ -73,58 +73,33 @@ func (c *Client) CountSlotsForNode(ctx context.Context, nodeID string) (int, err
 }
 
 // CountSlotsFromRanges parses a slot range string (e.g. "0-5460 10923-16383") and
-// returns the total number of individual slots covered.
+// returns the total number of individual slots covered. Migrating/importing markers
+// and malformed or out-of-range tokens are ignored.
 func CountSlotsFromRanges(slotStr string) int {
-	if slotStr == "" {
-		return 0
-	}
 	total := 0
 	for _, part := range splitFields(slotStr) {
 		// Skip importing/migrating markers like [123->-nodeID] or [123-<-nodeID].
-		if len(part) > 0 && part[0] == '[' {
+		if part[0] == '[' {
 			continue
 		}
-		lo, hi, found := cutString(part, "-")
-		if !found {
-			// Single slot.
-			total++
-			continue
+		if rng, err := parseSlotToken(part); err == nil {
+			total += rng.End - rng.Start + 1
 		}
-		loVal, err1 := strconv.Atoi(lo)
-		hiVal, err2 := strconv.Atoi(hi)
-		if err1 != nil || err2 != nil {
-			continue
-		}
-		total += hiVal - loVal + 1
 	}
 	return total
 }
 
-// ParseOpenSlots extracts slot numbers that are in a migrating or importing state
-// from the Slots field of a ClusterNode. These are in the format [<slot>->-<nodeID>]
-// (migrating) or [<slot>-<-<nodeID>] (importing).
-func ParseOpenSlots(slotStr string) []int {
-	var slots []int
+// OwnsSlots reports whether a CLUSTER NODES slot field lists any slot ownership entry,
+// ignoring migrating/importing markers ("[...]"). Unlike CountSlotsFromRanges it does not
+// validate the entries: anything unparseable is treated as ownership, so guards against
+// destructive operations (e.g. CLUSTER FORGET) stay conservative on unexpected input.
+func OwnsSlots(slotStr string) bool {
 	for _, part := range splitFields(slotStr) {
-		if len(part) < 2 || part[0] != '[' {
-			continue
+		if part[0] != '[' {
+			return true
 		}
-		// Extract slot number from [<slot>->-<id>] or [<slot>-<-<id>]
-		inner := part[1:] // strip leading '['
-		idx := 0
-		for idx < len(inner) && inner[idx] >= '0' && inner[idx] <= '9' {
-			idx++
-		}
-		if idx == 0 {
-			continue
-		}
-		slot, err := strconv.Atoi(inner[:idx])
-		if err != nil {
-			continue
-		}
-		slots = append(slots, slot)
 	}
-	return slots
+	return false
 }
 
 // splitFields splits a string by whitespace (same as strings.Fields but avoids import for this file).
@@ -145,16 +120,6 @@ func splitFields(s string) []string {
 		fields = append(fields, s[start:])
 	}
 	return fields
-}
-
-// cutString is a minimal strings.Cut equivalent for this file.
-func cutString(s, sep string) (before, after string, found bool) {
-	for i := range s {
-		if i+len(sep) <= len(s) && s[i:i+len(sep)] == sep {
-			return s[:i], s[i+len(sep):], true
-		}
-	}
-	return s, "", false
 }
 
 // FlushAll executes FLUSHALL on the Redis node.

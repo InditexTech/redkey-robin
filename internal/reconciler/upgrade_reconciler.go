@@ -1509,7 +1509,7 @@ func (cr *ClusterReconciler) forgetFailedNodes(ctx context.Context, seedClient *
 		}
 		// NEVER forget a node that still owns slots — doing so would leave those
 		// slots unassigned and corrupt the cluster topology.
-		if redis.CountSlotsFromRanges(node.Slots) > 0 {
+		if redis.OwnsSlots(node.Slots) {
 			cr.logger.Info("Rolling upgrade: skipping forget of failed node that still owns slots",
 				"nodeID", node.ID, "flags", node.Flags, "addr", node.Addr, "slots", node.Slots)
 			continue

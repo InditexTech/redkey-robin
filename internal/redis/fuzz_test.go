@@ -19,9 +19,12 @@ func FuzzParseSlotRanges(f *testing.F) {
 			return
 		}
 		for _, r := range ranges {
-			if r.Start < 0 || r.End < r.Start {
-				t.Fatalf("ParseSlotRanges(%q) returned invalid range %+v", raw, r)
+			if r.Start < 0 || r.End < r.Start || r.End >= TotalClusterSlots {
+				t.Fatalf("ParseSlotRanges(%q) returned out-of-bounds range %+v", raw, r)
 			}
+		}
+		if n := CountSlots(ranges); n < 0 {
+			t.Fatalf("CountSlots(%q) = %d, must be non-negative", raw, n)
 		}
 	})
 }
@@ -32,25 +35,17 @@ func FuzzCountSlotsFromRanges(f *testing.F) {
 	}
 	f.Fuzz(func(t *testing.T, s string) {
 		n := CountSlotsFromRanges(s)
+		if n < 0 {
+			t.Fatalf("CountSlotsFromRanges(%q) = %d, must be non-negative", s, n)
+		}
+		if n > len(splitFields(s))*TotalClusterSlots {
+			t.Fatalf("CountSlotsFromRanges(%q) = %d, exceeds possible maximum", s, n)
+		}
+		if n > 0 && !OwnsSlots(s) {
+			t.Fatalf("CountSlotsFromRanges(%q) = %d but OwnsSlots is false", s, n)
+		}
 		if withMarker := CountSlotsFromRanges(s + " [123->-abc]"); withMarker != n {
 			t.Fatalf("CountSlotsFromRanges(%q) = %d, but %d after appending a migrating marker", s, n, withMarker)
-		}
-	})
-}
-
-func FuzzParseOpenSlots(f *testing.F) {
-	for _, s := range []string{"[123->-abc]", "[456-<-def] 0-100", "[", "[]", "[99999999999999999999->-x]"} {
-		f.Add(s)
-	}
-	f.Fuzz(func(t *testing.T, s string) {
-		slots := ParseOpenSlots(s)
-		if len(slots) > len(splitFields(s)) {
-			t.Fatalf("ParseOpenSlots(%q) returned more slots (%d) than fields", s, len(slots))
-		}
-		for _, slot := range slots {
-			if slot < 0 {
-				t.Fatalf("ParseOpenSlots(%q) returned negative slot %d", s, slot)
-			}
 		}
 	})
 }
