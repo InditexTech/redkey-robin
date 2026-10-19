@@ -71,7 +71,7 @@ This repository does not use Maven. There is no `pom.xml` or `mvnw` in Robin, so
 | ------------------- | ------------- | ----- |
 | `mvn validate` | `make tidy && make fmt && make vet && make lint` | Closest pre-test validation sequence. |
 | `mvn test` | `make test` | Unit tests only. Generates `cover.out`. |
-| `mvn failsafe:integration-test` | `make test-integration` | Runs envtest-based integration tests. |
+| `mvn failsafe:integration-test` | `make test-integration` | Runs integration tests (envtest and real `redis-server` processes). |
 | `mvn failsafe:verify` | `make test-integration` | Same integration suite; there is no separate Maven-style verify step. |
 | `mvn verify` | `make lint && make test-all` | Preferred full local quality gate. |
 | `mvn package` | `make build` | Produces `bin/robin`. |
@@ -81,6 +81,7 @@ This repository does not use Maven. There is no `pom.xml` or `mvnw` in Robin, so
 
 - Go 1.27+
 - Make
+- curl and a C toolchain (`cc`, `make`), to build `redis-server`/`redis-cli` for the integration tests (`make redis`)
 - Docker or Podman (only needed for image build targets)
 - Access to the sibling `../redkey-operator` checkout, because this module imports its API types through a local `replace`
 
@@ -151,7 +152,7 @@ If a change only touches documentation or agent instructions, executable validat
 
 ```shell
 make test                     # fast unit-only loop while iterating
-make test-integration         # envtest coverage for reconciler/runtime behavior
+make test-integration         # envtest + real Redis coverage for reconciler/runtime behavior
 make lint && make test-all    # preferred full local gate before handing off
 make build                    # optional final binary build check
 make fuzz FUZZTIME=10s        # optional: fuzz the Redis output parsers when changing them
@@ -169,15 +170,15 @@ Runs unit tests for all packages except `e2e` and `test/integration`. Generates 
 make coverage    # generates coverage.html from cover.out
 ```
 
-### Integration tests (envtest)
+### Integration tests (envtest and real Redis)
 
-Requires the envtest binaries to be present. The target installs them automatically.
+Requires the envtest binaries and `redis-server`/`redis-cli`. The target installs both automatically: `make redis` downloads the Redis sources of the `REDIS_CLIENT_VERSION` tag from GitHub and builds the binaries into `bin/redis-<version>/` (only once).
 
 ```shell
 make test-integration
 ```
 
-Integration tests use CRDs from the sibling operator repository at `../redkey-operator/config/crd/bases` and run against envtest, not a real cluster.
+Integration tests use CRDs from the sibling operator repository at `../redkey-operator/config/crd/bases` and run against envtest, not a real cluster. Specs labeled `redis` run Robin's Redis primitives against local `redis-server` processes, to cover behaviors miniredis cannot emulate (cluster gossip, persisted `nodes.conf`, AOF reloads); they take bin/redis-* first and fall back to `PATH`. Run only them with `go test ./test/integration/ -ginkgo.label-filter=redis`.
 
 ### All tests (unit + integration)
 

@@ -21,7 +21,7 @@ VERSION ?= 0.2.0
 # GOLANG_VERSION defines the Go version used in the Dockerfile for building the Robin controller image.
 GOLANG_VERSION := 1.27.2
 
-# REDIS_CLIENT_VERSION defines the version of the Redis client library used in the project. This variable is used in the Dockerfile to ensure that the correct version of the Redis client is included in the built image.
+# REDIS_CLIENT_VERSION defines the Redis version used in the project: the redis-cli bundled in the image (Dockerfile) and the redis-server/redis-cli built into bin/ for the integration tests (`make redis`).
 REDIS_CLIENT_VERSION := 8.10.2
 
 # CONTAINER_TOOL defines the container tool to be used for building images.
@@ -136,7 +136,7 @@ coverage: test ## HTML coverage from unit tests only.
 
 # We use count=1 to disable test caching and force the tests to run every time.
 .PHONY: test-integration
-test-integration: fmt vet setup-envtest ## Run integration tests (envtest).
+test-integration: fmt vet setup-envtest redis ## Run integration tests (envtest and real redis-server processes).
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test ./test/integration/ -v -count=1
 
 .PHONY: test-all
@@ -216,6 +216,8 @@ $(LOCALBIN):
 ## Tool Binaries
 ENVTEST ?= $(LOCALBIN)/setup-envtest
 GOLANGCI_LINT = $(LOCALBIN)/golangci-lint
+REDIS_BIN_DIR ?= $(LOCALBIN)/redis-$(REDIS_CLIENT_VERSION)
+REDIS_SERVER = $(REDIS_BIN_DIR)/redis-server
 
 ## Tool Versions
 #ENVTEST_VERSION is the version of controller-runtime release branch to fetch the envtest setup script (i.e. release-0.20)
@@ -231,6 +233,25 @@ setup-envtest: envtest ## Download the binaries required for ENVTEST in the loca
 		echo "Error: Failed to set up envtest binaries for version $(ENVTEST_K8S_VERSION)."; \
 		exit 1; \
 	}
+
+# Redis publishes source tarballs only, so redis-server and redis-cli are built from source (a C
+# compiler and make are required) at the same version as the redis-cli bundled in the image. The
+# sources come from the GitHub release tag, the same origin the Dockerfile uses for redis-cli. A
+# single sub-make in src/ avoids the race of the top-level Makefile building deps twice in parallel;
+# libc malloc skips building jemalloc. MAKEFLAGS is cleared so variables passed to this make (e.g.
+# VERSION) do not leak into the Redis build.
+.PHONY: redis
+redis: $(REDIS_SERVER) ## Download and build redis-server and redis-cli locally if necessary (integration tests).
+$(REDIS_SERVER): | $(LOCALBIN)
+	@set -e; \
+	tmp=$$(mktemp -d); trap 'rm -rf "$$tmp"' EXIT; \
+	src="$$tmp/redis-$(REDIS_CLIENT_VERSION)"; \
+	echo "Building redis-server and redis-cli $(REDIS_CLIENT_VERSION) into $(REDIS_BIN_DIR)"; \
+	curl -fsSL "https://github.com/redis/redis/archive/refs/tags/$(REDIS_CLIENT_VERSION).tar.gz" | tar -xz -C "$$tmp"; \
+	env -u MAKEFLAGS -u MFLAGS make -C "$$src/src" -j"$$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)" \
+		MALLOC=libc redis-server redis-cli > "$$tmp/build.log" 2>&1 || { tail -50 "$$tmp/build.log"; exit 1; }; \
+	mkdir -p "$(REDIS_BIN_DIR)"; \
+	cp "$$src/src/redis-cli" "$$src/src/redis-server" "$(REDIS_BIN_DIR)/"
 
 .PHONY: envtest
 envtest: $(ENVTEST) ## Download setup-envtest locally if necessary.
