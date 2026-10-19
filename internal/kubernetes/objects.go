@@ -301,11 +301,11 @@ func buildConfigMap(clusterName, namespace string, config *redisv1.RedkeyConfig,
 //     detects partial failure states. Reduces impact on read-intensive workloads during
 //     transient conditions (node restart, network partition recovery).
 //   - cluster-allow-replica-migration no: disables Redis' automatic replica migration so
-//     the operator/robin retains full, deterministic control over topology. This prevents
-//     two unwanted behaviors during slot migrations (scale-down, upgrades): a primary that
-//     is drained to zero slots auto-converting into a replica of the node that absorbed its
-//     slots, and replicas auto-migrating between primaries. Both generate needless
-//     replication/sync traffic and can leave replicas in a cluster configured without them.
+//     the operator/robin retains full, deterministic control over topology: replicas do not
+//     auto-migrate between primaries, generating needless replication/sync traffic. Note that
+//     it does NOT prevent every demotion of a drained primary: Redis still turns a primary
+//     drained to zero slots into a replica of the node that received ALL of its slots
+//     (sender_slots == migrated_our_slots). Robin resets such nodes before reusing them.
 var clusterDefaults = []string{
 	"cluster-enabled yes",
 	"cluster-node-timeout 5000",

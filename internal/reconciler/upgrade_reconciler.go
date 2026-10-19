@@ -362,6 +362,16 @@ func (cr *ClusterReconciler) handleUpgradeScalingUp(ctx context.Context, config 
 
 	password := cr.getPassword(ctx, config)
 
+	// Reset any extra pod that came up with stale cluster state from a PVC retained by a previous
+	// upgrade (deletePVC=false). This MUST run before healTopology below, which meets every live
+	// pod missing from the cluster and would integrate a stale pod under its old identity (as a
+	// replica of node 0), stalling the upgrade. See sanitizeExtraNodes.
+	if reset, err := cr.sanitizeExtraNodes(ctx, config, password); err != nil {
+		return reconcileAfterInterval, fmt.Errorf("sanitizing extra nodes during upgrade scale up: %w", err)
+	} else if reset {
+		return reconcileImmediately, nil
+	}
+
 	// Heal membership before meeting the extra nodes: reintegrate any pod recreated by a
 	// concurrent disruption (forget its lingering entry, meet the replacement) so the meet
 	// and replica configuration below operate on a clean topology. meetMissing=true is safe
@@ -812,6 +822,7 @@ func (cr *ClusterReconciler) handleUpgradeEnding(ctx context.Context, config *re
 			}
 		}
 
+		cr.resetExtraNodesForRetention(ctx, config, password)
 		cr.updateSubstatus(ctx, config, redisv1.SubstatusUpgradeScalingDown)
 		return reconcileImmediately, nil
 	}
@@ -878,6 +889,10 @@ func (cr *ClusterReconciler) handleUpgradeEnding(ctx context.Context, config *re
 		}
 	}
 
+	// The drained extra was demoted by Redis to a replica of node 0 and its replicas still hold
+	// their old identity: leave every extra pod pristine so the PVCs retained after the scale-down
+	// (deletePVC=false) do not resurrect that state in the next upgrade.
+	cr.resetExtraNodesForRetention(ctx, config, password)
 	cr.updateSubstatus(ctx, config, redisv1.SubstatusUpgradeScalingDown)
 	return reconcileImmediately, nil
 }
@@ -1088,58 +1103,35 @@ func (cr *ClusterReconciler) waitReplicaSynced(ctx context.Context, replicaAddr,
 	return fmt.Errorf("replica %s did not reach master_link_status:up", replicaAddr)
 }
 
-// flushAndPersistNode clears the dataset of the node at addr and persists the empty state
-// to disk (SAVE). It is invoked before recycling a drained node in a PERSISTENT cluster so
-// the restarted pod reloads an up-to-date dataset rather than a stale pre-reshard RDB
-// snapshot that still contains keys for slots already migrated away. It must not be used
-// on ephemeral clusters (no on-disk RDB) nor on nodes that still own slots.
+// flushAndPersistNode clears the dataset and cluster identity of the node at addr and persists
+// that empty state to disk. It is invoked before recycling a drained node in a PERSISTENT cluster
+// so the restarted pod reloads neither a stale dataset with keys for slots already migrated away
+// nor a stale nodes.conf. It must not be used on nodes that still own slots.
+//
+// The node is reset with CLUSTER RESET HARD (see redis.Client.ResetToPristine), which forgets all
+// other nodes, drops every slot, resets the config epoch AND generates a brand-new node ID,
+// rewriting nodes.conf on disk. Without a HARD reset the recycled pod reloads its stale persistent
+// nodes.conf and rejoins under its OLD node ID with an outdated epoch/topology. The live cluster
+// still remembers that ID as the node it just emptied, so the conflicting rejoin is flagged as
+// "fail" by gossip; forgetFailedNodes then evicts it, and the following reshard aims at a
+// destination the cluster no longer knows ("node is not known or not a master"), deadlocking the
+// upgrade. A SOFT reset is not enough because it preserves the node ID and config epoch.
+//
+// A drained primary is often a read-only replica by now: Redis demotes an emptied primary into a
+// replica of the node that absorbed ALL its slots, even with cluster-allow-replica-migration no.
+// Resetting a replica empties its dataset in memory only (not recorded in the AOF), so the dataset
+// is flushed again once the node is a writable master; otherwise, with appendonly enabled, the
+// recycled pod would reload the stale keys from the AOF and claim their slots on startup.
+//
+// With a fresh ID the recycled node behaves like a brand-new member — exactly what ephemeral
+// clusters get for free (they lose nodes.conf on recycle) — so it is cleanly met back and accepted
+// as a reshard target. The reconciler re-reads the node ID after the pod is recycled.
 func (cr *ClusterReconciler) flushAndPersistNode(ctx context.Context, addr, password string) error {
 	c := redis.NewClient(addr, password)
 	defer func() { _ = c.Close() }()
 
-	// Determine the node's current role. After all of its slots have been migrated away,
-	// an emptied primary can be automatically demoted by Redis into a read-only replica of
-	// the node that absorbed those slots (cluster replica migration). FLUSHALL is rejected
-	// on a read-only replica ("READONLY You can't write against a read only replica").
-	isReplica, err := c.IsReplica(ctx)
-	if err != nil {
-		return fmt.Errorf("checking role of node %s before recycle: %w", addr, err)
-	}
-
-	// Masters holding keys reject CLUSTER RESET, so flush a writable master first. A
-	// read-only replica cannot be flushed (READONLY); CLUSTER RESET itself flushes the
-	// dataset when it turns the replica back into an empty master, so FLUSHALL is skipped
-	// for that case.
-	if !isReplica {
-		if err := c.FlushAll(ctx); err != nil {
-			return fmt.Errorf("flushing node %s before recycle: %w", addr, err)
-		}
-	}
-
-	// CLUSTER RESET HARD wipes the node's persisted cluster identity: it forgets all other
-	// nodes, drops every slot assignment, resets the config epoch AND generates a brand-new
-	// node ID, rewriting nodes.conf on disk. This is essential for PERSISTENT clusters.
-	//
-	// Without a HARD reset, the recycled pod reloads its stale persistent nodes.conf and
-	// rejoins under its OLD node ID with an outdated epoch/topology. The live cluster still
-	// remembers that ID as the node it just emptied, so the conflicting rejoin is flagged
-	// as "fail" by gossip; forgetFailedNodes then evicts it, and the following reshard aims
-	// at a destination the cluster no longer knows ("node is not known or not a master"),
-	// deadlocking the upgrade. A SOFT reset is not enough because it preserves the node ID
-	// and config epoch, reproducing the very conflict we need to avoid.
-	//
-	// With a fresh ID the recycled node behaves like a brand-new member — exactly what
-	// ephemeral clusters get for free (they lose nodes.conf on recycle) — so it is cleanly
-	// met back and accepted as a reshard target. The reconciler re-reads the node ID after
-	// the pod is recycled, so the new ID is picked up automatically.
-	if err := c.ClusterReset(ctx, true); err != nil {
-		return fmt.Errorf("resetting cluster state of node %s before recycle: %w", addr, err)
-	}
-
-	// Persist the now-empty dataset so the recycled pod does not reload a stale RDB snapshot
-	// and resurrect keys for slots it no longer owns.
-	if err := c.Save(ctx); err != nil {
-		return fmt.Errorf("persisting empty dataset on node %s before recycle: %w", addr, err)
+	if _, err := c.ResetToPristine(ctx); err != nil {
+		return fmt.Errorf("resetting node %s before recycle: %w", addr, err)
 	}
 	return nil
 }
