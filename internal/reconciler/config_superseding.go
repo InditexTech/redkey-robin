@@ -87,6 +87,68 @@ func ApplySuperseding(configs []redisv1.RedkeyConfig, selected *redisv1.RedkeyCo
 	return result
 }
 
+// ApplyScaleToZeroLookahead looks ahead of the selected config for a pending
+// configuration that scales the cluster to zero primaries. If one exists, the
+// LAST such config is selected and every non-terminal config from selected up
+// to it is returned as Superseded, so Robin can jump straight to the simple and
+// safe scale-to-zero operation instead of applying the intermediate changes.
+//
+// Unlike ApplySuperseding, this applies unconditionally: it ignores
+// SkipIfSuperseded and the topology-only restriction, and it can supersede a
+// selected config that is already InProgress. This makes it an escape hatch for
+// configs that are wedged InProgress (e.g. an upgrade to an invalid image).
+//
+// No jump is performed when the selected config is InProgress and already
+// targets zero primaries, since it is already scaling to zero.
+//
+// configs must be sorted by Spec.Sequence ascending.
+func ApplyScaleToZeroLookahead(configs []redisv1.RedkeyConfig, selected *redisv1.RedkeyConfig) SupersedingResult {
+	result := SupersedingResult{Selected: selected}
+	if selected == nil {
+		return result
+	}
+	if selected.Status.ConfigPhase == redisv1.ConfigPhaseApplied ||
+		selected.Status.ConfigPhase == redisv1.ConfigPhaseSuperseded {
+		return result
+	}
+	if selected.Status.ConfigPhase == redisv1.ConfigPhaseInProgress && selected.Spec.Primaries == 0 {
+		return result
+	}
+
+	selectedIdx := indexOfConfig(configs, selected)
+	if selectedIdx < 0 {
+		return result
+	}
+
+	zeroIdx := -1
+	for i := len(configs) - 1; i > selectedIdx; i-- {
+		phase := configs[i].Status.ConfigPhase
+		if (phase == redisv1.ConfigPhasePending || phase == "") && configs[i].Spec.Primaries == 0 {
+			zeroIdx = i
+			break
+		}
+	}
+	if zeroIdx < 0 {
+		return result
+	}
+
+	// Supersede the selected config itself (it is the slice element) and every
+	// non-terminal config between it and the scale-to-zero target.
+	for i := selectedIdx; i < zeroIdx; i++ {
+		phase := configs[i].Status.ConfigPhase
+		if phase == redisv1.ConfigPhaseApplied || phase == redisv1.ConfigPhaseSuperseded {
+			continue
+		}
+		if i == selectedIdx {
+			result.Superseded = append(result.Superseded, selected)
+			continue
+		}
+		result.Superseded = append(result.Superseded, &configs[i])
+	}
+	result.Selected = &configs[zeroIdx]
+	return result
+}
+
 // findBaseline returns the last Applied config with a sequence lower than
 // selected. Returns nil if no such config exists.
 func findBaseline(configs []redisv1.RedkeyConfig, selected *redisv1.RedkeyConfig) *redisv1.RedkeyConfig {

@@ -129,7 +129,7 @@ func (r *Reconciler) nextWaitDuration(schedule reconcileSchedule, onError bool) 
 // idle/wait configured interval.
 // onError applies the error interval regardless of the returned schedule.
 func (r *Reconciler) reconcile(ctx context.Context) (schedule reconcileSchedule, onError bool) {
-	previousConfig, targetConfig, err := r.selectConfig(ctx)
+	previousConfig, targetConfig, forceScaleToZero, err := r.selectConfig(ctx)
 	if err != nil {
 		r.logger.Error("Failed to select RedkeyConfig", "error", err)
 		return reconcileAfterInterval, true
@@ -176,6 +176,27 @@ func (r *Reconciler) reconcile(ctx context.Context) (schedule reconcileSchedule,
 	var onReconcilingError bool
 	switch targetConfig.Status.ConfigPhase {
 	case redisv1.ConfigPhasePending:
+		if forceScaleToZero {
+			// Reached through the scale-to-zero lookahead: go straight to ScalingToZero.
+			if err := r.startScaleToZero(ctx, targetConfig, previousConfig); err != nil {
+				r.logger.Error("Failed to start scale-to-zero configuration",
+					"name", targetConfig.Name, "error", err)
+				scheduleRequired = reconcileAfterInterval
+				onReconcilingError = true
+				break
+			}
+			schedule, err := r.clusterReconciler.ReconcileCluster(ctx, targetConfig, previousConfig)
+			if err != nil {
+				r.logger.Error("Cluster reconciliation error", "error", err)
+				scheduleRequired = schedule
+				onReconcilingError = true
+				break
+			}
+			scheduleRequired = schedule
+			onReconcilingError = false
+			break
+		}
+
 		// Start applying a new config.
 		if err := r.setConfigPhaseInProgress(ctx, targetConfig); err != nil {
 			r.logger.Error("Failed to set ConfigPhase to InProgress",
@@ -331,6 +352,32 @@ func (r *Reconciler) hasMoreActionableConfigs(ctx context.Context, applied *redi
 		}
 	}
 	return false
+}
+
+// startScaleToZero starts a scale-to-zero config reached through the
+// scale-to-zero lookahead. It writes ConfigPhase=InProgress and
+// Status=ScalingToZero in a single update, so a restart can never resume this
+// config through handleNew/handleConfigChange, which would not delete the
+// objects left by the superseded configs (e.g. when there is no previous Applied
+// config, or the previous one already had zero primaries).
+func (r *Reconciler) startScaleToZero(ctx context.Context, targetConfig, previousConfig *redisv1.RedkeyConfig) error {
+	if previousConfig != nil {
+		targetConfig.Status = *previousConfig.Status.DeepCopy()
+	}
+	if targetConfig.Status.Nodes == nil {
+		targetConfig.Status.Nodes = map[string]*redisv1.RedisNode{}
+	}
+	targetConfig.Status.ConfigPhase = redisv1.ConfigPhaseInProgress
+	targetConfig.Status.Status = redisv1.ClusterStatusScalingToZero
+	targetConfig.Status.Substatus = redisv1.RedkeySubstatus{}
+	if err := r.client.Status().Update(ctx, targetConfig); err != nil {
+		return err
+	}
+	r.logger.Info("Starting scale-to-zero configuration",
+		"name", targetConfig.Name,
+		"sequence", targetConfig.Spec.Sequence,
+	)
+	return nil
 }
 
 // copyPreviousClusterStatus copies the previous Status into the target configuration, preserving the target ConfigPhase and persisting the result.

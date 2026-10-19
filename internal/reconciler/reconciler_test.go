@@ -296,7 +296,7 @@ func TestSetConfigPhaseInProgress(t *testing.T) {
 func TestSelectConfig_NoConfigs(t *testing.T) {
 	r := newTestReconciler()
 
-	prev, selected, err := r.selectConfig(context.Background())
+	prev, selected, _, err := r.selectConfig(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -313,7 +313,7 @@ func TestSelectConfig_InitialisesEmptyPhase(t *testing.T) {
 
 	r := newTestReconciler(cfg)
 
-	prev, selected, err := r.selectConfig(context.Background())
+	prev, selected, _, err := r.selectConfig(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -340,7 +340,7 @@ func TestSelectConfig_ReturnsFirstPending(t *testing.T) {
 
 	r := newTestReconciler(cfg1, cfg2)
 
-	prev, selected, err := r.selectConfig(context.Background())
+	prev, selected, _, err := r.selectConfig(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -360,7 +360,7 @@ func TestSelectConfig_WithSuperseding(t *testing.T) {
 
 	r := newTestReconciler(cfg1, cfg2, cfg3)
 
-	prev, selected, err := r.selectConfig(context.Background())
+	prev, selected, _, err := r.selectConfig(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -865,7 +865,7 @@ func TestSelectConfig_MultipleChainedSuperseded(t *testing.T) {
 
 	r := newTestReconciler(cfg1, cfg2, cfg3, cfg4, cfg5)
 
-	prev, selected, err := r.selectConfig(context.Background())
+	prev, selected, _, err := r.selectConfig(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -897,7 +897,7 @@ func TestSelectConfig_SkipIfSupersededButIsLastPending(t *testing.T) {
 
 	r := newTestReconciler(cfg1, cfg2)
 
-	prev, selected, err := r.selectConfig(context.Background())
+	prev, selected, _, err := r.selectConfig(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

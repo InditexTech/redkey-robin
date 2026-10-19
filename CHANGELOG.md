@@ -13,6 +13,7 @@ Format is based on [Keep a Changelog](http://keepachangelog.com/).
 ## [Unreleased] - dd.mm.yyyy
 ### Added
 - Go native fuzz tests for the Redis output parsers (slot ranges, `CLUSTER NODES`, `--cluster check`), plus a `make fuzz` target.
+- Scale-to-zero lookahead: when a later pending `RedkeyConfig` targets `primaries: 0`, Robin jumps straight to the last such config and marks the intermediate ones (including a wedged `InProgress` config) as `Superseded`, regardless of `skipIfSuperseded`. This lets a cluster blocked by a config that cannot complete (e.g. an invalid image) be recovered by scaling it to zero (#41, partially mitigates #42).
 ### Fixed
 - Slot range parsing rejects slots outside `0-16383`, and `CountSlotsFromRanges` ignores malformed tokens instead of returning negative or inflated counts. The checks that protect slot owners from `CLUSTER FORGET` now treat any unparseable slot entry as ownership (#62).
 - Bump `golang.org/x/net` to v0.61.0 to fix HTTP/2 vulnerabilities GO-2026-6603, GO-2026-6610, GO-2026-6611, GO-2026-6612 and GO-2026-6617.
