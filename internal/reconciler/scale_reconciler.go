@@ -91,6 +91,14 @@ func (cr *ClusterReconciler) handleScalingUp(ctx context.Context, config *redisv
 		return reconcileAfterWaitInterval, nil
 	}
 
+	// Reset new pods that remounted a PVC retained by an earlier scale-down (deletePVC=false) and
+	// came up with a stale identity, so they are classified and met as brand-new empty nodes.
+	if reset, err := cr.sanitizeScaleUpNodes(ctx, nodes); err != nil {
+		return reconcileAfterInterval, fmt.Errorf("sanitizing new nodes for scale up: %w", err)
+	} else if reset {
+		return reconcileImmediately, nil
+	}
+
 	topo, err := cr.classifyScaleUpNodes(ctx, nodes)
 	if err != nil {
 		return reconcileAfterInterval, err
