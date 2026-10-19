@@ -1,0 +1,31 @@
+internal/reconciler/reconciler.go
+  s_6eb3821b6b0f97::t_04da67cc0bc63c 132,179-199,357-382
+internal/reconciler/reconciler_test.go
+  s_6eb3821b6b0f97::t_59a9400a7da92c 299,316,343,363,868,900
+test/integration/config_scale_to_zero_lookahead_test.go
+  s_e64992d7d6a879::t_5901c88326ae44 1-184
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "45b32aab0439b88b41b8acfbf7300b9018990d03",
+  "prompts": {},
+  "sessions": {
+    "s_6eb3821b6b0f97": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "f8b2e921-4393-4660-9ecf-8002b11dea83",
+        "model": "unknown"
+      },
+      "human_author": "Alberto Martínez Pérez <albertompe@ext.inditex.com>"
+    },
+    "s_e64992d7d6a879": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "f602a975-edf4-481f-940a-c34ffdd7a8f4",
+        "model": "unknown"
+      },
+      "human_author": "Alberto Martínez Pérez <albertompe@ext.inditex.com>"
+    }
+  }
+}
