@@ -154,6 +154,37 @@ var _ = Describe("Scale-to-zero lookahead (integration)", func() {
 		expectClusterObjectsGone()
 	})
 
+	It("does not abandon an in-progress config on a storage cluster that keeps its PVCs", func() {
+		scalingOwner(3, 1, nil)
+		createPlaceholderClusterObjects()
+
+		keep := false
+		storageSpec := func(seq int, primaries int32) redisv1.RedkeyConfigSpec {
+			spec := baselineConfigSpec(seq, primaries, 1)
+			spec.Ephemeral = false
+			spec.Storage = "1Gi"
+			spec.DeletePVC = &keep
+			return spec
+		}
+
+		wedged := storageSpec(1, 3)
+		wedged.Image = invalidRedisImage
+		createConfigWithStatus("lookahead-storage-1", wedged, redisv1.RedkeyConfigStatus{
+			ConfigPhase: redisv1.ConfigPhaseInProgress,
+			Status:      redisv1.ClusterStatusInitializing,
+		})
+		createConfigWithStatus("lookahead-storage-2", storageSpec(2, 0), redisv1.RedkeyConfigStatus{
+			ConfigPhase: redisv1.ConfigPhasePending,
+		})
+
+		startScalingReconciler()
+
+		expectConfigPhaseStays("lookahead-storage-1", redisv1.ConfigPhaseInProgress)
+		expectConfigPhaseStays("lookahead-storage-2", redisv1.ConfigPhasePending)
+		stsKey := types.NamespacedName{Name: clusterName, Namespace: testNamespace}
+		Expect(k8sClient.Get(ctx, stsKey, &appsv1.StatefulSet{})).To(Succeed())
+	})
+
 	It("supersedes a chain of pending configs and applies only the scale-to-zero", func() {
 		scalingOwner(3, 1, nil)
 		createPlaceholderClusterObjects()
