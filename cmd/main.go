@@ -6,6 +6,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -32,6 +33,9 @@ const (
 	defaultReconcileIntervalOnWait  = time.Duration(robinconfig.DefaultReconcilerIntervalOnWaitSeconds) * time.Second
 )
 
+// Overridden at build time via -ldflags "-X main.version=<v>".
+var version = "dev"
+
 var scheme = runtime.NewScheme()
 
 func init() {
@@ -45,6 +49,7 @@ func main() {
 	var metricsAddr string
 	var logLevel string
 	var enablePprof bool
+	var showVersion bool
 	var reconcileInterval time.Duration
 	var reconcileIntervalOnError = defaultReconcileIntervalOnError
 	var reconcileIntervalOnWait = defaultReconcileIntervalOnWait
@@ -61,7 +66,13 @@ func main() {
 		"Polling interval for the reconciliation loop when an error occurs")
 	flag.DurationVar(&reconcileIntervalOnWait, "reconcile-interval-on-wait", defaultReconcileIntervalOnWait,
 		"Polling interval for the reconciliation loop while waiting for convergence")
+	flag.BoolVar(&showVersion, "version", false, "Print the Robin version and exit")
 	flag.Parse()
+
+	if showVersion {
+		fmt.Println(version)
+		return
+	}
 
 	var slogLevel slog.Level
 	if err := slogLevel.UnmarshalText([]byte(logLevel)); err != nil {
@@ -81,6 +92,7 @@ func main() {
 	}
 
 	logger.Info("Starting Redkey Robin",
+		"version", version,
 		"cluster", clusterName,
 		"namespace", namespace,
 		"metricsAddr", metricsAddr,
@@ -96,6 +108,7 @@ func main() {
 		logger.Error("Unable to get Kubernetes config", "error", err)
 		os.Exit(1)
 	}
+	config.UserAgent = "redkey-robin/" + version
 
 	k8sClient, err := client.New(config, client.Options{Scheme: scheme})
 	if err != nil {
@@ -138,6 +151,12 @@ func main() {
 			errChan <- err
 		}
 	}()
+
+	// Not on the resettable registry: Reset() would drop it.
+	if err := metrics.RegisterBuildInfo(crmetrics.Registry, version); err != nil {
+		logger.Error("Unable to register build info metric", "error", err)
+		os.Exit(1)
+	}
 
 	// Create the resettable metrics registry
 	redkeyMetricsRegistry := metrics.NewResettableRegistry()
