@@ -209,6 +209,77 @@ func TestApplyScaleToZeroLookahead_NilSelected(t *testing.T) {
 	}
 }
 
+func TestApplyScaleToZeroLookahead_StorageCluster(t *testing.T) {
+	boolPtr := func(b bool) *bool { return &b }
+	storageConfigs := func(selectedPhase string, deletePVC *bool) []redisv1.RedkeyConfig {
+		configs := []redisv1.RedkeyConfig{
+			makeFullConfig("cfg-1", 1, redisv1.ConfigPhaseApplied, 3, 1, false),
+			makeFullConfig("cfg-2", 2, selectedPhase, 3, 1, false),
+			makeFullConfig("cfg-3", 3, redisv1.ConfigPhasePending, 5, 1, false),
+			makeFullConfig("cfg-4", 4, redisv1.ConfigPhasePending, 0, 1, false),
+		}
+		for i := range configs {
+			configs[i].Spec.Ephemeral = false
+			configs[i].Spec.Storage = "1Gi"
+			configs[i].Spec.DeletePVC = boolPtr(false)
+		}
+		configs[3].Spec.DeletePVC = deletePVC
+		return configs
+	}
+
+	tests := []struct {
+		name           string
+		selectedPhase  string
+		deletePVC      *bool
+		wantSelected   string
+		wantSuperseded []string
+	}{
+		{
+			name:          "in-progress with deletePVC=false is not superseded",
+			selectedPhase: redisv1.ConfigPhaseInProgress,
+			deletePVC:     boolPtr(false),
+			wantSelected:  "cfg-2",
+		},
+		{
+			name:          "in-progress with nil deletePVC is not superseded",
+			selectedPhase: redisv1.ConfigPhaseInProgress,
+			deletePVC:     nil,
+			wantSelected:  "cfg-2",
+		},
+		{
+			name:           "in-progress with deletePVC=true on the scale-to-zero config is superseded",
+			selectedPhase:  redisv1.ConfigPhaseInProgress,
+			deletePVC:      boolPtr(true),
+			wantSelected:   "cfg-4",
+			wantSuperseded: []string{"cfg-2", "cfg-3"},
+		},
+		{
+			name:           "pending configs are superseded even with deletePVC=false",
+			selectedPhase:  redisv1.ConfigPhasePending,
+			deletePVC:      boolPtr(false),
+			wantSelected:   "cfg-4",
+			wantSuperseded: []string{"cfg-2", "cfg-3"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			configs := storageConfigs(tt.selectedPhase, tt.deletePVC)
+			result := ApplyScaleToZeroLookahead(configs, &configs[1])
+			if result.Selected == nil || result.Selected.Name != tt.wantSelected {
+				t.Fatalf("expected selected %s, got %v", tt.wantSelected, result.Selected)
+			}
+			got := namesOf(result.Superseded)
+			if len(got) == 0 && len(tt.wantSuperseded) == 0 {
+				return
+			}
+			if !reflect.DeepEqual(got, tt.wantSuperseded) {
+				t.Fatalf("expected superseded %v, got %v", tt.wantSuperseded, got)
+			}
+		})
+	}
+}
+
 // --- selectConfig with scale-to-zero lookahead ---
 
 func TestSelectConfig_ScaleToZeroLookahead_SupersedesInProgressAndPending(t *testing.T) {
@@ -435,6 +506,35 @@ func TestReconcile_ScaleToZeroLookahead(t *testing.T) {
 
 			assertClusterObjectsDeleted(t, r.client)
 		})
+	}
+}
+
+func TestReconcile_ScaleToZeroLookahead_StorageKeepsInProgress(t *testing.T) {
+	keep := false
+	storage := func(cfg *redisv1.RedkeyConfig) *redisv1.RedkeyConfig {
+		cfg.Spec.Ephemeral = false
+		cfg.Spec.Storage = "1Gi"
+		cfg.Spec.DeletePVC = &keep
+		return cfg
+	}
+	cfg1 := storage(makeConfigWithLabels("cfg-applied", 1, redisv1.ConfigPhaseApplied, 3, 1))
+	cfg1.Status.Status = redisv1.ClusterStatusReady
+	cfg2 := storage(makeConfigWithLabels("cfg-wedged", 2, redisv1.ConfigPhaseInProgress, 3, 1))
+	cfg2.Spec.Image = "redis:does-not-exist"
+	cfg2.Status.Status = redisv1.ClusterStatusInitializing
+	cfg3 := storage(makeConfigWithLabels("cfg-zero", 3, redisv1.ConfigPhasePending, 0, 1))
+
+	objs := append([]client.Object{cfg1, cfg2, cfg3}, clusterObjects()...)
+	r := newTestReconciler(objs...)
+
+	if _, onError := r.reconcile(context.Background()); onError {
+		t.Fatal("expected no error")
+	}
+
+	assertConfigPhase(t, r.client, "cfg-wedged", redisv1.ConfigPhaseInProgress)
+	assertConfigPhase(t, r.client, "cfg-zero", redisv1.ConfigPhasePending)
+	if err := r.client.Get(context.Background(), types.NamespacedName{Name: "test-cluster", Namespace: "default"}, &appsv1.StatefulSet{}); err != nil {
+		t.Fatalf("expected StatefulSet to be kept, got %v", err)
 	}
 }
 

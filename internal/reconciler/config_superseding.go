@@ -93,10 +93,18 @@ func ApplySuperseding(configs []redisv1.RedkeyConfig, selected *redisv1.RedkeyCo
 // to it is returned as Superseded, so Robin can jump straight to the simple and
 // safe scale-to-zero operation instead of applying the intermediate changes.
 //
-// Unlike ApplySuperseding, this applies unconditionally: it ignores
-// SkipIfSuperseded and the topology-only restriction, and it can supersede a
-// selected config that is already InProgress. This makes it an escape hatch for
-// configs that are wedged InProgress (e.g. an upgrade to an invalid image).
+// Unlike ApplySuperseding, this ignores SkipIfSuperseded and the topology-only
+// restriction, and it can supersede a selected config that is already
+// InProgress. This makes it an escape hatch for configs that are wedged
+// InProgress (e.g. an upgrade to an invalid image).
+//
+// An InProgress config is only superseded when scaling to zero discards the
+// cluster data (ephemeral cluster, or deletePVC=true on the scale-to-zero
+// config). On storage clusters that retain their PVCs, abandoning an operation
+// midway (e.g. with slots already moved to nodes that are not recreated) could
+// leave persisted state that cannot be restored when scaling back up from zero,
+// so Robin waits for the InProgress config to finish. Pending configs are
+// always superseded, since they have not touched the cluster yet.
 //
 // No jump is performed when the selected config is InProgress and already
 // targets zero primaries, since it is already scaling to zero.
@@ -131,6 +139,9 @@ func ApplyScaleToZeroLookahead(configs []redisv1.RedkeyConfig, selected *redisv1
 	if zeroIdx < 0 {
 		return result
 	}
+	if selected.Status.ConfigPhase == redisv1.ConfigPhaseInProgress && !scaleToZeroDiscardsData(&configs[zeroIdx]) {
+		return result
+	}
 
 	// Supersede the selected config itself (it is the slice element) and every
 	// non-terminal config between it and the scale-to-zero target.
@@ -147,6 +158,13 @@ func ApplyScaleToZeroLookahead(configs []redisv1.RedkeyConfig, selected *redisv1
 	}
 	result.Selected = &configs[zeroIdx]
 	return result
+}
+
+// scaleToZeroDiscardsData reports whether applying the given scale-to-zero
+// config leaves no cluster data behind: the cluster is ephemeral or its PVCs
+// are deleted. A nil deletePVC keeps the PVCs, as in handleScalingToZero.
+func scaleToZeroDiscardsData(cfg *redisv1.RedkeyConfig) bool {
+	return cfg.Spec.Ephemeral || (cfg.Spec.DeletePVC != nil && *cfg.Spec.DeletePVC)
 }
 
 // findBaseline returns the last Applied config with a sequence lower than
