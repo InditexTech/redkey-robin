@@ -15,6 +15,9 @@ NAME := redkey-robin
 # VERSION defines the version of the project.
 VERSION ?= 0.2.0
 
+# LDFLAGS injects VERSION into the binary (plain `go build` falls back to "dev").
+LDFLAGS := -X main.version=$(VERSION)
+
 
 ## Tool Versions and Configuration
 
@@ -162,7 +165,7 @@ clean: ## Clean de build artifacts, installed tools, Go cache and generated file
 
 .PHONY: build
 build: ##	Build program binary
-	go build -o bin/robin cmd/main.go
+	go build -ldflags "$(LDFLAGS)" -o bin/robin ./cmd/
 
 # By default, Robin will be run with info log level. To run Robin with debug log level, set the LOG_DEBUG variable to true:
 # - make run LOG_DEBUG=true
@@ -172,7 +175,7 @@ NAMESPACE ?= redkey-operator
 CLUSTER_NAME ?= redkey-sample
 .PHONY: run
 run: ##	Execute the program locally
-	go run ./cmd/main.go --cluster-name=$(CLUSTER_NAME) --namespace=$(NAMESPACE) $(if $(filter true,$(LOG_DEBUG)),--log-level=debug)
+	go run -ldflags "$(LDFLAGS)" ./cmd/ --cluster-name=$(CLUSTER_NAME) --namespace=$(NAMESPACE) $(if $(filter true,$(LOG_DEBUG)),--log-level=debug)
 
 # If you wish to build the manager image targeting other platforms you can use the --platform flag.
 # (i.e. docker build --platform linux/arm64). However, you must enable docker buildKit for it.
