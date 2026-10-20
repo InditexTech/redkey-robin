@@ -18,17 +18,20 @@ import (
 // most recent previously-applied configuration (previousConfig), if one exists.
 // previousConfig is the config immediately before targetConfig in sequence order
 // and can be used later to detect what changed between the two.
-func (r *Reconciler) selectConfig(ctx context.Context) (previousConfig *redisv1.RedkeyConfig, targetConfig *redisv1.RedkeyConfig, err error) {
+// forceScaleToZero is true when targetConfig was reached through the
+// scale-to-zero lookahead (see ApplyScaleToZeroLookahead) and must therefore be
+// driven straight to the ScalingToZero cluster status.
+func (r *Reconciler) selectConfig(ctx context.Context) (previousConfig *redisv1.RedkeyConfig, targetConfig *redisv1.RedkeyConfig, forceScaleToZero bool, err error) {
 	// Get the list of configs for this cluster, sorted by sequence ascending.
 	configs, err := r.listConfigs(ctx, true)
 	if err != nil {
 		r.logger.Error("Failed to list RedkeyConfigs", "error", err)
-		return nil, nil, err
+		return nil, nil, false, err
 	}
 
 	if len(configs) == 0 {
 		r.logger.Info("No RedkeyConfig resources found")
-		return nil, nil, nil
+		return nil, nil, false, nil
 	}
 
 	// Log current state
@@ -58,7 +61,25 @@ func (r *Reconciler) selectConfig(ctx context.Context) (previousConfig *redisv1.
 	previous, selected := SelectConfig(configs)
 	if selected == nil {
 		r.logger.Info("No actionable RedkeyConfig found")
-		return nil, nil, nil
+		return nil, nil, false, nil
+	}
+
+	// If a later pending config scales the cluster to zero, jump straight to it.
+	lookahead := ApplyScaleToZeroLookahead(configs, selected)
+	if len(lookahead.Superseded) > 0 {
+		r.logger.Warn("Pending scale-to-zero configuration found, superseding intermediate configurations",
+			"target", lookahead.Selected.Name,
+			"targetSequence", lookahead.Selected.Spec.Sequence,
+			"superseded", configNames(lookahead.Superseded),
+		)
+		for _, cfg := range lookahead.Superseded {
+			if err := r.markConfigSuperseded(ctx, cfg); err != nil {
+				r.logger.Error("Failed to mark config as Superseded, retrying scale-to-zero lookahead on next cycle",
+					"name", cfg.Name, "error", err)
+				return nil, nil, false, err
+			}
+		}
+		return previous, lookahead.Selected, true, nil
 	}
 
 	// Attempt superseding to skip intermediate configs.
@@ -68,7 +89,16 @@ func (r *Reconciler) selectConfig(ctx context.Context) (previousConfig *redisv1.
 		target = r.applySupersedingStatus(ctx, supersedingResult)
 	}
 
-	return previous, target, nil
+	return previous, target, false, nil
+}
+
+// configNames returns the names of the given configs, for logging purposes.
+func configNames(configs []*redisv1.RedkeyConfig) []string {
+	names := make([]string, 0, len(configs))
+	for _, cfg := range configs {
+		names = append(names, cfg.Name)
+	}
+	return names
 }
 
 // listConfigs lists all RedkeyConfig CRs for this cluster. If sorted is true, the returned slice is sorted by sequence ascending.
@@ -111,10 +141,7 @@ func (r *Reconciler) initConfigPhase(ctx context.Context, cfg *redisv1.RedkeyCon
 // active config). On full success it returns supersedingResult.Selected.
 func (r *Reconciler) applySupersedingStatus(ctx context.Context, sr SupersedingResult) *redisv1.RedkeyConfig {
 	for _, cfg := range sr.Superseded {
-		r.logger.Info("Superseding configuration",
-			"name", cfg.Name, "sequence", cfg.Spec.Sequence)
-		cfg.Status.ConfigPhase = redisv1.ConfigPhaseSuperseded
-		if err := r.client.Status().Update(ctx, cfg); err != nil {
+		if err := r.markConfigSuperseded(ctx, cfg); err != nil {
 			r.logger.Error("Failed to mark config as Superseded, falling back",
 				"name", cfg.Name, "error", err)
 			// This config could not be superseded — use it as the active config.
@@ -122,6 +149,14 @@ func (r *Reconciler) applySupersedingStatus(ctx context.Context, sr SupersedingR
 		}
 	}
 	return sr.Selected
+}
+
+// markConfigSuperseded persists ConfigPhase=Superseded for cfg.
+func (r *Reconciler) markConfigSuperseded(ctx context.Context, cfg *redisv1.RedkeyConfig) error {
+	r.logger.Info("Superseding configuration",
+		"name", cfg.Name, "sequence", cfg.Spec.Sequence, "configPhase", cfg.Status.ConfigPhase)
+	cfg.Status.ConfigPhase = redisv1.ConfigPhaseSuperseded
+	return r.client.Status().Update(ctx, cfg)
 }
 
 // setConfigPhaseInProgress transitions a config to InProgress.
