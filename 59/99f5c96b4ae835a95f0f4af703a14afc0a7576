@@ -1,0 +1,21 @@
+CHANGELOG.md
+  s_6eb3821b6b0f97::t_44d4babf731179 16
+test/integration/config_scale_to_zero_lookahead_test.go
+  s_6eb3821b6b0f97::t_bb4a9f95df7aea 157-187
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5999f5c96b4ae835a95f0f4af703a14afc0a7576",
+  "prompts": {},
+  "sessions": {
+    "s_6eb3821b6b0f97": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "f8b2e921-4393-4660-9ecf-8002b11dea83",
+        "model": "unknown"
+      },
+      "human_author": "Alberto Martínez Pérez <albertompe@ext.inditex.com>"
+    }
+  }
+}
