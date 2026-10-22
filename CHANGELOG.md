@@ -12,6 +12,11 @@ Format is based on [Keep a Changelog](http://keepachangelog.com/).
 
 ## [Unreleased] - dd.mm.yyyy
 ### Added
+### Fixed
+### Changed
+
+## [0.2.1] - 22.10.2026
+### Added
 - `redkey_robin_build_info` gauge (value 1, labels `version` and `go_version`) on the metrics endpoint, a `--version` flag, the version in the startup log, and `redkey-robin/<version>` as the Kubernetes client `User-Agent`.
 - Go native fuzz tests for the Redis output parsers (slot ranges, `CLUSTER NODES`, `--cluster check`), plus a `make fuzz` target.
 - Scale-to-zero lookahead: when a later pending `RedkeyConfig` targets `primaries: 0`, Robin jumps straight to the last such config and marks the intermediate ones as `Superseded`, regardless of `skipIfSuperseded`. A wedged `InProgress` config (e.g. an upgrade to an invalid image) is also superseded when scaling to zero discards the cluster data (ephemeral cluster or `deletePVC: true`); storage clusters that keep their PVCs wait for the `InProgress` operation to finish, so they can be restored when scaling back up from zero (#41, partially mitigates #42).
