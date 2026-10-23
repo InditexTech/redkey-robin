@@ -340,10 +340,12 @@ func buildRedisConf(userConfig, password string, ephemeral, standalone bool) str
 		lines = append(lines, "cluster-config-file "+dataDir+"/nodes.conf")
 	}
 
+	// Persistence is owned by exactly one layer. Ephemeral clusters run Redis in the container
+	// writable layer, where AOF/RDB files are never reloaded, so Robin disables them. Persistent
+	// clusters get no persistence directive from Robin: the user decides through spec.config, and
+	// when it sets none the Redis defaults apply (AOF off, RDB with the default save points).
 	if ephemeral {
 		lines = append(lines, "appendonly no", "save \"\"")
-	} else {
-		lines = append(lines, "appendonly yes")
 	}
 
 	// Add user config (may override defaults above)
