@@ -14,6 +14,9 @@ Format is based on [Keep a Changelog](http://keepachangelog.com/).
 ### Added
 ### Fixed
 ### Changed
+- **Breaking:** Robin no longer forces `appendonly yes` on persistent (`ephemeral: false`) clusters. Persistence is now owned by exactly one layer: Robin keeps writing `appendonly no` + `save ""` for ephemeral clusters, while persistent clusters get no `appendonly`/`save` directive from Robin and take them from `spec.config`. When `spec.config` sets none, the Redis defaults apply (AOF off, RDB with the default save points `3600 1 300 100 60 10000`). This also stops the generated `redis.conf` from repeating directives that clients such as the Helm chart already set explicitly (#77).
+  - Migration: add `appendonly yes` (and `save ...` if needed) to `spec.config` of persistent clusters **before** upgrading Robin to keep AOF. Robin rewrites the ConfigMap, but the config checksum only covers `spec.config`, so pods are not rolled: the new configuration applies on the next pod restart. A graceful restart reloads the data from the `dump.rdb` written at shutdown; after a crash, writes since the last RDB snapshot are lost.
+  - Deployments using the Redkey Helm chart are not affected: the chart already renders explicit `save`/`appendonly` directives, which overrode Robin's line.
 
 ## [0.2.1] - 22.10.2026
 ### Added

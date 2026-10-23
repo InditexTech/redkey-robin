@@ -6,6 +6,8 @@ package kubernetes
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"testing"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -99,11 +101,11 @@ func TestBuildConfigMap_Ephemeral(t *testing.T) {
 	cm := buildConfigMap("test-cluster", "default", config, "")
 
 	conf := cm.Data["redis.conf"]
-	if !contains(conf, "appendonly no") {
-		t.Error("expected 'appendonly no' for ephemeral cluster")
+	if got := countDirective(conf, "appendonly"); got != 1 || !contains(conf, "appendonly no\n") {
+		t.Errorf("expected exactly one 'appendonly no' for ephemeral cluster, got %d in:\n%s", got, conf)
 	}
-	if !contains(conf, "save \"\"") {
-		t.Error("expected 'save \"\"' for ephemeral cluster")
+	if got := countDirective(conf, "save"); got != 1 || !contains(conf, "save \"\"\n") {
+		t.Errorf("expected exactly one 'save \"\"' for ephemeral cluster, got %d in:\n%s", got, conf)
 	}
 }
 
@@ -113,8 +115,14 @@ func TestBuildConfigMap_NonEphemeral(t *testing.T) {
 	cm := buildConfigMap("test-cluster", "default", config, "")
 
 	conf := cm.Data["redis.conf"]
-	if !contains(conf, "appendonly yes") {
-		t.Error("expected 'appendonly yes' for non-ephemeral cluster")
+	if got := countDirective(conf, "appendonly"); got != 0 {
+		t.Errorf("expected no 'appendonly' directive for non-ephemeral cluster, got %d in:\n%s", got, conf)
+	}
+	if got := countDirective(conf, "save"); got != 0 {
+		t.Errorf("expected no 'save' directive for non-ephemeral cluster, got %d in:\n%s", got, conf)
+	}
+	if !contains(conf, "dir /data\n") || !contains(conf, "cluster-config-file /data/nodes.conf\n") {
+		t.Errorf("expected /data as data dir for non-ephemeral cluster, got:\n%s", conf)
 	}
 }
 
@@ -932,6 +940,66 @@ func TestBuildRedisConf_UserConfigOverridesDefaults(t *testing.T) {
 	if userIdx <= defaultIdx {
 		t.Error("expected user config to appear after defaults (last-write-wins)")
 	}
+}
+
+// TestBuildRedisConf_PersistenceOwnership pins down who writes the persistence directives:
+// Robin for ephemeral clusters (AOF and RDB off, emitted once, before the user config), the user
+// (spec.config) for persistent clusters, where Robin must not add any appendonly/save line.
+func TestBuildRedisConf_PersistenceOwnership(t *testing.T) {
+	userConfigs := []struct {
+		name           string
+		config         string
+		wantAppendonly int
+		wantSave       int
+	}{
+		{"no user persistence", "maxmemory 90mb", 0, 0},
+		{"user enables AOF and RDB", "appendonly yes\nappendfsync everysec\nsave 900 1", 1, 1},
+		{"user disables AOF and RDB", "appendonly no\nsave \"\"", 1, 1},
+	}
+
+	for _, standalone := range []bool{false, true} {
+		for _, uc := range userConfigs {
+			name := fmt.Sprintf("standalone=%t/%s", standalone, uc.name)
+
+			t.Run("ephemeral/"+name, func(t *testing.T) {
+				conf := buildRedisConf(uc.config, "", true, standalone)
+				if got, want := countDirective(conf, "appendonly"), 1+uc.wantAppendonly; got != want {
+					t.Errorf("expected %d 'appendonly' lines, got %d in:\n%s", want, got, conf)
+				}
+				if got, want := countDirective(conf, "save"), 1+uc.wantSave; got != want {
+					t.Errorf("expected %d 'save' lines, got %d in:\n%s", want, got, conf)
+				}
+				robinIdx := indexOf(conf, "appendonly no\nsave \"\"\n")
+				if robinIdx < 0 {
+					t.Fatalf("expected Robin's 'appendonly no' + 'save \"\"' block in:\n%s", conf)
+				}
+				if userIdx := strings.LastIndex(conf, uc.config); userIdx <= robinIdx {
+					t.Errorf("expected user config after Robin's persistence defaults (last-write-wins), got:\n%s", conf)
+				}
+			})
+
+			t.Run("persistent/"+name, func(t *testing.T) {
+				conf := buildRedisConf(uc.config, "", false, standalone)
+				if got := countDirective(conf, "appendonly"); got != uc.wantAppendonly {
+					t.Errorf("expected %d 'appendonly' lines (user only), got %d in:\n%s", uc.wantAppendonly, got, conf)
+				}
+				if got := countDirective(conf, "save"); got != uc.wantSave {
+					t.Errorf("expected %d 'save' lines (user only), got %d in:\n%s", uc.wantSave, got, conf)
+				}
+			})
+		}
+	}
+}
+
+// countDirective returns how many redis.conf lines set the given directive.
+func countDirective(conf, directive string) int {
+	n := 0
+	for _, line := range strings.Split(conf, "\n") {
+		if fields := strings.Fields(line); len(fields) > 0 && fields[0] == directive {
+			n++
+		}
+	}
+	return n
 }
 
 func indexOf(s, substr string) int {
