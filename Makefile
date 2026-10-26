@@ -13,7 +13,7 @@ SHELL = /usr/bin/env bash -o pipefail
 NAME := redkey-robin
 
 # VERSION defines the version of the project.
-VERSION ?= 0.2.1
+VERSION ?= 0.2.2
 
 # LDFLAGS injects VERSION into the binary (plain `go build` falls back to "dev").
 LDFLAGS := -X main.version=$(VERSION)
