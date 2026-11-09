@@ -1,0 +1,125 @@
+.github/CODEOWNERS
+  s_b01c9400ed16c7::t_bdc28fe452c421 8
+.github/workflows/release.yml
+  s_b01c9400ed16c7::t_a159db4bc77a62 65,67,84
+AGENTS.md
+  s_b01c9400ed16c7::t_9c1279097faa1b 34,57-58,85,177,301,305,325
+README.md
+  s_b01c9400ed16c7::t_038b8d81c7a31a 13,15-18,25-28,30,45,47,51,53-58
+REUSE.toml
+  s_b01c9400ed16c7::t_7c83983c8f8d2f 2,4
+SUPPORT.md
+  s_b01c9400ed16c7::t_f8af8015588864 17,23
+cmd/main.go
+  s_b01c9400ed16c7::t_efcad050a08ac4 23-26
+go.mod
+  s_b01c9400ed16c7::t_d6e9d2dbdebbaf 5,9,13
+internal/config/runtime.go
+  s_b01c9400ed16c7::t_2386f19afcf01b 13
+internal/config/runtime_test.go
+  s_b01c9400ed16c7::t_57558f383cb840 12
+internal/health/checker.go
+  s_b01c9400ed16c7::t_1d56f0270f981a 18
+internal/health/checker_coverage_test.go
+  s_b01c9400ed16c7::t_9ea7a2664967c8 13
+internal/health/checker_test.go
+  s_b01c9400ed16c7::t_544d737efde0d5 13
+internal/kubernetes/objects.go
+  s_b01c9400ed16c7::t_19818173f832b4 27
+internal/kubernetes/objects_test.go
+  s_b01c9400ed16c7::t_609297271ec10a 21
+internal/kubernetes/overrides.go
+  s_b01c9400ed16c7::t_ce95d28e6b96e8 16
+internal/kubernetes/overrides_test.go
+  s_b01c9400ed16c7::t_5e52dcdd7f3f9d 20
+internal/metrics/collector.go
+  s_b01c9400ed16c7::t_32d340a2f6da1d 21-24
+internal/metrics/collector_test.go
+  s_b01c9400ed16c7::t_88e82f3836e068 25-28
+internal/metrics/server.go
+  s_b01c9400ed16c7::t_8dc36c8a38d0f5 15
+internal/metrics/server_test.go
+  s_b01c9400ed16c7::t_560e2a89b6b116 17
+internal/reconciler/cluster_reconciler.go
+  s_b01c9400ed16c7::t_96b96389a0b7e4 19-23
+internal/reconciler/cluster_reconciler_test.go
+  s_b01c9400ed16c7::t_51b257c185bd40 12-15
+internal/reconciler/config_changes.go
+  s_b01c9400ed16c7::t_b8b2f80c34b309 12
+internal/reconciler/config_changes_test.go
+  s_b01c9400ed16c7::t_7d0b7312eebab5 14
+internal/reconciler/config_plan.go
+  s_b01c9400ed16c7::t_bb7ee0ee075b65 11
+internal/reconciler/config_plan_test.go
+  s_b01c9400ed16c7::t_23a45cd3672695 10
+internal/reconciler/config_superseding.go
+  s_b01c9400ed16c7::t_ba37d7239a6a9d 10
+internal/reconciler/config_superseding_test.go
+  s_b01c9400ed16c7::t_062996d4b6384b 10
+internal/reconciler/health_reconciler.go
+  s_b01c9400ed16c7::t_944d2eb5b4b9e7 17-19
+internal/reconciler/health_reconciler_coverage_test.go
+  s_b01c9400ed16c7::t_2cfca18566776c 12-14
+internal/reconciler/health_reconciler_test.go
+  s_b01c9400ed16c7::t_a84a8d692b7a15 12-14
+internal/reconciler/reconciler.go
+  s_b01c9400ed16c7::t_7b3ac7623e4d48 15-16
+internal/reconciler/reconciler_test.go
+  s_b01c9400ed16c7::t_9a07f1cc162d7b 15-16
+internal/reconciler/scale_reconciler.go
+  s_b01c9400ed16c7::t_e8715aafd7a308 16-18
+internal/reconciler/scale_reconciler_test.go
+  s_b01c9400ed16c7::t_30ceb2a5dfb6df 12-15
+internal/reconciler/scale_zero_reconciler.go
+  s_b01c9400ed16c7::t_7aa76a2dc8ad54 11-12
+internal/reconciler/scale_zero_reconciler_test.go
+  s_b01c9400ed16c7::t_0011d04af52f4e 11-12
+internal/reconciler/shutdown_cleanup_test.go
+  s_b01c9400ed16c7::t_bece8feaafb1d5 10
+internal/reconciler/standalone_reconciler.go
+  s_b01c9400ed16c7::t_2c2e0291b464f7 13-15
+internal/reconciler/standalone_reconciler_test.go
+  s_b01c9400ed16c7::t_239a6970cfcb93 11-12
+internal/reconciler/status_transitions.go
+  s_b01c9400ed16c7::t_321cddd665d507 7
+internal/reconciler/status_transitions_test.go
+  s_b01c9400ed16c7::t_f7ad82c4a22a4e 10
+internal/reconciler/upgrade_reconciler.go
+  s_b01c9400ed16c7::t_5f1d5584781800 13-15
+internal/reconciler/upgrade_reconciler_test.go
+  s_b01c9400ed16c7::t_8bf52d7893182d 12-13
+test/integration/cluster_lifecycle_test.go
+  s_b01c9400ed16c7::t_8606ba79038c97 19
+test/integration/config_changes_test.go
+  s_b01c9400ed16c7::t_23a5af23a13ebd 16
+test/integration/config_plan_test.go
+  s_b01c9400ed16c7::t_07e4e3c50ad030 18-19
+test/integration/config_superseding_test.go
+  s_b01c9400ed16c7::t_5324ebafe75b01 16-17
+test/integration/override_test.go
+  s_b01c9400ed16c7::t_90ab8839791ec9 18-19
+test/integration/reconciler_test.go
+  s_b01c9400ed16c7::t_f2e1617d4a7940 17-19
+test/integration/scaling_test.go
+  s_b01c9400ed16c7::t_83153f89896ecc 17
+test/integration/standalone_test.go
+  s_b01c9400ed16c7::t_0a1a1917d1468c 20
+test/integration/suite_test.go
+  s_b01c9400ed16c7::t_cde9861f1f7d06 25,55
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "1172ff01a40d15adf5bf7366440190d9c596b00c",
+  "prompts": {},
+  "sessions": {
+    "s_b01c9400ed16c7": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "ae4e3c5d-8576-48f0-9cc8-198f4263f76c",
+        "model": "gpt-5.3-codex"
+      },
+      "human_author": "Alberto Martínez Pérez <albertompe@ext.inditex.com>"
+    }
+  }
+}

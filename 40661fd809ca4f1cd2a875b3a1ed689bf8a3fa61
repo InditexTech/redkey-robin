@@ -1,0 +1,19 @@
+.github/workflows/release.yml
+  s_a106ff7f701880::t_8d95bb5958d83f 25,60,66,73,80,83
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "40661fd809ca4f1cd2a875b3a1ed689bf8a3fa61",
+  "prompts": {},
+  "sessions": {
+    "s_a106ff7f701880": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "4a60a279-fff1-4bdd-9f30-7b44455207f5",
+        "model": "unknown"
+      },
+      "human_author": "Alberto Martínez Pérez <albertompe@ext.inditex.com>"
+    }
+  }
+}

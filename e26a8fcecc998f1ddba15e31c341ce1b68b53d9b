@@ -1,0 +1,21 @@
+CHANGELOG.md
+  s_974a794b6950b2::t_0354533cf53c44 15-19
+Makefile
+  s_974a794b6950b2::t_3588824b035f55 16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.6",
+  "base_commit_sha": "e26a8fcecc998f1ddba15e31c341ce1b68b53d9b",
+  "prompts": {},
+  "sessions": {
+    "s_974a794b6950b2": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "3e1a8c3d-ec80-439c-9152-b38c740a60c8",
+        "model": "unknown"
+      },
+      "human_author": "Alberto Martínez Pérez <albertompe@ext.inditex.com>"
+    }
+  }
+}

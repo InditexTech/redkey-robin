@@ -1,0 +1,20 @@
+AGENTS.md
+  h_daebd220e3f9d7 157
+CHANGELOG.md
+  h_daebd220e3f9d7 15
+Makefile
+  h_daebd220e3f9d7 145-151
+internal/redis/fuzz_test.go
+  h_daebd220e3f9d7 1-94
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7e3f2c7d19a9431addcfdbf124b4ba7bc9882c08",
+  "prompts": {},
+  "humans": {
+    "h_daebd220e3f9d7": {
+      "author": "Alberto Martínez Pérez <albertompe@ext.inditex.com>"
+    }
+  }
+}

@@ -1,0 +1,14 @@
+SUPPORT.md
+  h_daebd220e3f9d7 27,37
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "63a7fe9e4c7754349ca3927327a7b41a26e4455b",
+  "prompts": {},
+  "humans": {
+    "h_daebd220e3f9d7": {
+      "author": "Alberto Martínez Pérez <albertompe@ext.inditex.com>"
+    }
+  }
+}

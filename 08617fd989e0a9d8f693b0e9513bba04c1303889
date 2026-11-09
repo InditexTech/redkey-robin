@@ -1,0 +1,21 @@
+go.mod
+  s_43e735e111763c::t_b27a7933070661 14-16,19-22,42,51-52,58-59,61-67,69,81
+go.sum
+  s_43e735e111763c::t_b13c59c2a39c2a 57-58,67-68,94-97,103-104,107-110,148-151,154-167,170-171,186-187,190-193,200-201,206-207
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "08617fd989e0a9d8f693b0e9513bba04c1303889",
+  "prompts": {},
+  "sessions": {
+    "s_43e735e111763c": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "20226cae-c4fa-44d5-b8ac-c4b1618292fb",
+        "model": "gpt-5.3-codex"
+      },
+      "human_author": "Alberto Martínez Pérez <albertompe@ext.inditex.com>"
+    }
+  }
+}

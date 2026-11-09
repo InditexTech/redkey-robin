@@ -1,0 +1,19 @@
+.github/workflows/first-contribution.yml
+  s_e69c5da2747946::t_4a7a24e2468191 1-33
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "5fa65926749932a3050428004f3fa802ab3ff701",
+  "prompts": {},
+  "sessions": {
+    "s_e69c5da2747946": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "32494235-1143-4be0-b61e-08a60c796415",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Ivan Alvarez Sabin <ivanasabi@ext.inditex.com>"
+    }
+  }
+}

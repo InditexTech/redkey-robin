@@ -1,0 +1,89 @@
+AGENTS.md
+  s_fc20b899e481bc::t_ba2a7ef36a245e 15,20,25,56,204-205
+Makefile
+  s_fc20b899e481bc::t_4a15a83063bcda 149
+README.md
+  s_fc20b899e481bc::t_746414b6883f1b 39
+cmd/main.go
+  s_fc20b899e481bc::t_9b5567671c8355 52-53,120,154
+internal/config/runtime.go
+  s_fc20b899e481bc::t_c8dd5299f05bd3 102,108,142
+internal/kubernetes/objects.go
+  s_fc20b899e481bc::t_7c9feede8e38c7 47,51-52,84,240,276,359,363,406,440,461,548,594,626,673,771,972
+internal/kubernetes/objects_test.go
+  s_fc20b899e481bc::t_43ce6f8d16a6a8 31-32,38,48-49,54,461,971-972,977
+internal/kubernetes/overrides_test.go
+  s_fc20b899e481bc::t_ae7e4a5f4608f2 363,378,401,410,436,471,497,533,538,564,602,660,729
+internal/metrics/collector.go
+  s_fc20b899e481bc::t_a057acc425dbec 588
+internal/metrics/server.go
+  s_fc20b899e481bc::t_e26595e12250f9 30,59
+internal/reconciler/cluster_reconciler.go
+  s_fc20b899e481bc::t_9b42ba7125489a 82,133,193,212,235,276,326,390,408,469,633,643,655,677,695,716,731,739,757-758,765,795,824,867,888,902,930
+internal/reconciler/cluster_reconciler_test.go
+  s_fc20b899e481bc::t_88431974ede4a8 32-33,39,48-49,54,61,76,90,106,170,198,269,279,295,305,321,337,364,387
+internal/reconciler/config_changes.go
+  s_fc20b899e481bc::t_5db117e1df9b88 29,85,87,142,178,230
+internal/reconciler/config_changes_test.go
+  s_fc20b899e481bc::t_6b3ef93daec7dc 22-23,368
+internal/reconciler/config_plan.go
+  s_fc20b899e481bc::t_473daf82890191 15,21,25,30,36,60,74-76,97,99,102,112,128,133,148,172,182
+internal/reconciler/config_plan_test.go
+  s_fc20b899e481bc::t_973c97914074af 14-16,18-19,32,55,72,82,98,113,131,149,167,184
+internal/reconciler/config_superseding.go
+  s_fc20b899e481bc::t_7cdaa31c0c12e8 16,18,37,92-93,107,120
+internal/reconciler/config_superseding_test.go
+  s_fc20b899e481bc::t_4faa1ab90c7fe5 14,16-17,19,28,33,51,69,85,102,120,142,164,186,204,226,279,292,305,319,332,349,362,385,399,415,431,447,467,496,514
+internal/reconciler/reconciler.go
+  s_fc20b899e481bc::t_6c12b3d76c1408 20,32-33,134,138,314,318,337,379,389
+internal/reconciler/reconciler_test.go
+  s_fc20b899e481bc::t_ee647f297cd347 34,37,43,49,54-55,60,69-70,76,84,250,260,276,285,328,375,412,435,464,479,484,500,555,574,581,590,881
+internal/reconciler/scale_reconciler.go
+  s_fc20b899e481bc::t_0eabdb1d80eb59 29,40,47,321,360,521,595,727
+internal/reconciler/scale_reconciler_test.go
+  s_fc20b899e481bc::t_d1a606f78d72ee 21,109,139,167,201,232
+internal/reconciler/scale_zero_reconciler.go
+  s_fc20b899e481bc::t_ac55cd5c61ecf9 18
+internal/reconciler/scale_zero_reconciler_test.go
+  s_fc20b899e481bc::t_26ae043cfca9de 21-22,27,35,64,113,124,166,207,242,267,281
+internal/reconciler/standalone_reconciler.go
+  s_fc20b899e481bc::t_237e985e44cacf 24,60,120,123,145,180,211,214,354
+internal/reconciler/standalone_reconciler_test.go
+  s_fc20b899e481bc::t_bdaa7c54271663 21-22,28,38-39,44,52,67,80,106,130,143,160,173,196,209,232,258,272,307,497
+internal/reconciler/upgrade_reconciler.go
+  s_fc20b899e481bc::t_473aea5f481994 25,37,51,62,112,128,238,265,283,288,293,347,424,570,765,887,977,1149,1182,1311,1404,1456,1501
+internal/reconciler/upgrade_reconciler_test.go
+  s_fc20b899e481bc::t_edf53442903047 127,143,194,210,241,277,292,323,359,410,469,517
+test/integration/cluster_lifecycle_test.go
+  s_fc20b899e481bc::t_645f9dcf5fb621 25-27,56-57,62,83,90,117-118,123,142,152,156,161,180,187,209,214,234
+test/integration/config_changes_test.go
+  s_fc20b899e481bc::t_32e5a41d187441 21-22,28,48,68,74,93,106,116,122,141,152,162,168,187,198,208,214,233,244,254,260,279,290,300,306,325,337,345,354,360,380,391,402,408,428,440,451,457,477,484,490,510,521,532,538,558,570
+test/integration/config_plan_test.go
+  s_fc20b899e481bc::t_c7dd170a9827c8 30-31,37,49,53,60-61,73,80
+test/integration/config_superseding_test.go
+  s_fc20b899e481bc::t_75134eddead802 20-21,27,72,109,192,234
+test/integration/override_test.go
+  s_fc20b899e481bc::t_f837554226434a 25,44,46,56,58,70,118,186,188,210
+test/integration/reconciler_test.go
+  s_fc20b899e481bc::t_9e0dfd1786951d 63,70,76,91,106,127,131,155,159,163,179,190,194,225,229
+test/integration/scaling_test.go
+  s_fc20b899e481bc::t_a7c1e11a670f1b 20,22-23,25,68-69,75,86,95,144,184,233
+test/integration/standalone_test.go
+  s_fc20b899e481bc::t_f3959b31e74148 23-25,27,40-41,47,62,65,93,154,179,226
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "0d9902c33805a326b1e224e4256b17645ca22e56",
+  "prompts": {},
+  "sessions": {
+    "s_fc20b899e481bc": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "d61cee9d-3bac-4746-9352-5d89569a79ad",
+        "model": "gpt-5.3-codex"
+      },
+      "human_author": "Alberto Martínez Pérez <albertompe@ext.inditex.com>"
+    }
+  }
+}

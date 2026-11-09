@@ -1,0 +1,19 @@
+LICENSES/CC-BY-SA-4.0.txt
+  s_241d0fda166df1::t_42d7e3b205d1c3 1-418
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "2946432b4ab364be3926312eeb0eacebedf42e3d",
+  "prompts": {},
+  "sessions": {
+    "s_241d0fda166df1": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "52429190-4213-44c9-b0f8-f3bb5cd38e3c",
+        "model": "gpt-5.3-codex"
+      },
+      "human_author": "Alberto Martínez Pérez <albertompe@ext.inditex.com>"
+    }
+  }
+}

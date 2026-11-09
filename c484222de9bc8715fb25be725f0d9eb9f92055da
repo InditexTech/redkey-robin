@@ -1,0 +1,14 @@
+CHANGELOG.md
+  h_daebd220e3f9d7 18-20
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.6",
+  "base_commit_sha": "c484222de9bc8715fb25be725f0d9eb9f92055da",
+  "prompts": {},
+  "humans": {
+    "h_daebd220e3f9d7": {
+      "author": "Alberto Martínez Pérez <albertompe@ext.inditex.com>"
+    }
+  }
+}
