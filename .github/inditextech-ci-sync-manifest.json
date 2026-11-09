@@ -12,7 +12,7 @@
   "creation_year": 2026,
   "integrity": {
     "algorithm": "hmac-sha256",
-    "signature": "d6e6dd0bd66ef7b2f3f20681dbfa188e98eebb6851de698bb34f20bca6847798"
+    "signature": "d15cee7750351e2ec6a494761fffd58422ae58059223a38c441bb1ccad6a4933"
   },
   "managed_by": "InditexTech CI governance",
   "managed_paths": {
@@ -21,6 +21,7 @@
     ".github/ISSUE_TEMPLATE/3-other.yml": "5a839b39a98704036210dee498146f51bd5a6c057228685680e02004ff063a9a",
     ".github/ISSUE_TEMPLATE/config.yml": "10e5dee4d49aa9e7792ceb4c986160c61f95da1ba00a64bf06e5f1f636cd17ec",
     ".github/PULL_REQUEST_TEMPLATE.md": "23a0b0ac79a9020ccac9c013582a01f86e2df2ae7f914673583b9a3368313041",
+    ".github/dependabot.yml": "d817f5ca1a6b99ff4e5a25a4755d215f834d6fb75325df12ab99774e0e7b9450",
     ".github/inditextech-ci-go.json": "032d24106d6856e11dde7d6d8a9ba0d6c99af0faa300612c3172a970bb97fe62",
     ".github/workflows/code-gomod_go-PR_verify.yml": "d148e5af0bc577e6deff1c6c57916de83af3e553fbe197d057ac2e7c6d7e22cb",
     ".github/workflows/code-gomod_go-sonarcloud-analysis.yml": "fcb5c72a4ae59a3b429420b1e15eda5c4c0cb4a0aa89c3f4f99eb2e3198dcaca",
@@ -29,7 +30,6 @@
     ".github/workflows/push-verify.yml": "643f6905fa30284af4a2eabac752293b2e785a5e82449bb6d97950624386829c",
     ".github/workflows/scorecard-analysis.yml": "b45c2a0f87801796cefb4363d9f1414891b0734bc07de3f50d4a880e22faea10",
     "CODE_OF_CONDUCT.md": "ce1e7a8f68a7917d48c03f9f7aae5529367f73af0e959276e889d33ea1e8d4ab",
-    "CONTRIBUTING.md": "4e1264ca54a45df44b362c7533f0eba912bfa77b6f561121ae9e5e9d6aa00df3",
     "SECURITY.md": "0ee7a3356bc3a1c7649e3b7a6a9012b0608011be2b1ff8d106ad02c8950bab25",
     "repolinter.json": "0efb305c47a63f03c488a34906fc2d5471c84145c2ff553f2aacf3a41b92e1a1"
   },
@@ -42,7 +42,7 @@
   "retained_paths": {},
   "schema_version": 2,
   "source_digests": {
-    "base": "7e2620ef26ae53d9243d38ce0a669e8841c38e82c916467e27e5e54abb067597",
+    "base": "b5d5302dc47b88e363dd1b3adb1c043f85923a8480b8ce057928657fe049872c",
     "go": "553836e941384482b416db2684c551a70a9f285f3734c010cfcd133cba266b39"
   }
 }
